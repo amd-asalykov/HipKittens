@@ -31,7 +31,7 @@ struct micro_globals {
     _gl_C c;
     dim3 grid()  { return dim3((N / BLOCK_SIZE) * (M / BLOCK_SIZE)); } 
     dim3 block() { return dim3(NUM_THREADS); } 
-    size_t dynamic_shared_memory() { return 65536; }
+    size_t dynamic_shared_memory() { return MAX_SHARED_MEMORY; }
 };
 
 __global__ __launch_bounds__(NUM_THREADS, 2)
@@ -50,9 +50,8 @@ void micro_tk(const micro_globals g) {
 
     const int NUM_WGS = gridDim.x * gridDim.y;
     const int NUM_XCDS = 8;
-    const int CUS_PER_XCD = 38;
+    const int CUS_PER_XCD = 32;
     const int NUM_CUS = CUS_PER_XCD * NUM_XCDS;
-
     // Swizzle chiplet so that wgids are in the same XCD.
     wgid = (wgid % NUM_XCDS) * (NUM_WGS / NUM_XCDS) + (wgid / NUM_XCDS);
     // Swizzle for better L2 within the same XCD.
