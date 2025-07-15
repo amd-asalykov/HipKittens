@@ -1,6 +1,6 @@
 #include "kittens.cuh"
 #include "pyutils/pyutils.cuh"
-#include "utils.cpp"
+#include "../utils.cpp"
 using namespace kittens;
 
 constexpr int BLOCK_SIZE       = 128;  
