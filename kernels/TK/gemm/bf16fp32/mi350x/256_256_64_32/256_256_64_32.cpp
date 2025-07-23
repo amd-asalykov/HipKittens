@@ -103,8 +103,8 @@ void micro_tk(const micro_globals g) {
 
         // Cluster 0
         load_lds_reg(B_tile, subtile_inplace<REG_BLOCK_N, DOT_SLICE>(Bs[tic], {warp_col, 0}));
-        load_lds_reg(A_tile, subtile_inplace<REG_BLOCK_M, DOT_SLICE>(As[tic], {warp_row, 0}));
         load_global_to_shared_direct_with_swizzled_offsets<2, false, st_bf<BLOCK_SIZE, K_STEP>, _gl_A, coord<st_bf<BLOCK_SIZE, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, tile+1}, As[toc], swizzled_offsets_A);
+        load_lds_reg(A_tile, subtile_inplace<REG_BLOCK_M, DOT_SLICE>(As[tic], {warp_row, 0}));
         load_global_to_shared_direct_with_swizzled_offsets<2, false, st_bf<BLOCK_SIZE, K_STEP>, _gl_B, coord<st_bf<BLOCK_SIZE, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, tile+1}, Bs[toc], swizzled_offsets_B);
         __builtin_amdgcn_s_barrier();
 
