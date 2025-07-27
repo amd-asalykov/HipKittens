@@ -207,10 +207,6 @@ __device__ static inline void row_reduce(V &row_accum, const T &src, const V &sr
         #pragma unroll
         for(int k = 0; k < packed_per_tile; k++) {
             row_accum[i][k] = packed_shfl(MASK_ALL, row_accum[i][k], leader);
-            if (threadIdx.x == 0 || threadIdx.x == 32) {
-                printf("threadIdx.x: %d, i: %d, k: %d, row_accum[i][k].x: %f\n", threadIdx.x, i, k, row_accum[i][k].x);
-                printf("threadIdx.x: %d, i: %d, k: %d, row_accum[i][k].y: %f\n", threadIdx.x, i, k, row_accum[i][k].y);
-            }
         }
     }
 }
