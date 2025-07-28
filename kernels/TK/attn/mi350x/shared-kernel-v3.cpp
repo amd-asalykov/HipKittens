@@ -112,12 +112,11 @@ __global__ void attend_ker(const attn_globals<D> g) {
 
         for (int i = 0; i < num_sub_tiles; i++) {
 
-            // load(k_reg, g.Kg, {batch_idx, head_idx, j * num_sub_tiles + i, 0});
             load_lds_reg(k_reg, subtile_inplace<BLOCK_SIZE, ATTN_D>(k_smem[tic], {i, 0}));
-            // load(v_reg, g.Vg, {batch_idx, head_idx, j * num_sub_tiles + i, 0});
             load_lds_reg_col(v_reg, subtile_inplace<BLOCK_SIZE, ATTN_D>(v_smem[tic], {i, 0}));
-            __builtin_amdgcn_s_waitcnt(0);
+            asm volatile("s_waitcnt lgkmcnt(0)\n");
             __builtin_amdgcn_s_barrier();
+            __builtin_amdgcn_sched_barrier(0);
 
             // zero
             zero(att_block);
@@ -152,12 +151,11 @@ __global__ void attend_ker(const attn_globals<D> g) {
 
     for (int i = 0; i < num_sub_tiles; i++) {
 
-        // load(k_reg, g.Kg, {batch_idx, head_idx, (num_tiles - 1) * num_sub_tiles + i, 0});
         load_lds_reg(k_reg, subtile_inplace<BLOCK_SIZE, ATTN_D>(k_smem[tic], {i, 0}));
-        // load(v_reg, g.Vg, {batch_idx, head_idx, (num_tiles - 1) * num_sub_tiles + i, 0});
         load_lds_reg(v_reg, subtile_inplace<BLOCK_SIZE, ATTN_D>(v_smem[tic], {i, 0}));
         __builtin_amdgcn_s_waitcnt(0);
         __builtin_amdgcn_s_barrier();
+        __builtin_amdgcn_sched_barrier(0);
 
         // zero
         zero(att_block);

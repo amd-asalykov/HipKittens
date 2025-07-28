@@ -285,7 +285,6 @@ __device__ inline static void load_lds_reg(RT &dst, const ST &src) {
 
                     asm volatile(
                         "ds_read_b128 %0, %1 offset:%2\n"
-                        "s_waitcnt lgkmcnt(0)\n"
                         : "=v"(*reinterpret_cast<float4*>(&dst.tiles[i][j].data[k*4]))
                         : "v"(addr), "i"(i * ST::underlying_cols * kittens::TILE_ROW_DIM<U> * sizeof(U))
                         : "memory"
@@ -338,7 +337,6 @@ __device__ inline static void load_lds_reg_col(RT &dst, const ST &src) {
                 asm volatile(
                     "ds_read_b64_tr_b16 %0, %2\n"
                     "ds_read_b64_tr_b16 %1, %3\n"
-                    "s_waitcnt lgkmcnt(0)\n"
                     : "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j].data[k*4])), 
                     "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j].data[k*4 + 2]))
                     : "v"(addr0),
