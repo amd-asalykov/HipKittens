@@ -110,6 +110,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
         load_global_to_shared_direct<2, false, st_bf<N_STEP, ATTN_D>, _gl_QKVO, coord<st_bf<N_STEP,ATTN_D>>, NUM_THREADS>(
             g.Vg, {batch_idx, head_idx, j + 1, 0}, v_smem[toc]);
 
+        #pragma unroll
         for (int i = 0; i < num_sub_tiles; i++) {
 
             load_lds_reg(k_reg, subtile_inplace<BLOCK_SIZE, ATTN_D>(k_smem[tic], {i, 0}));
