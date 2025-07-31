@@ -347,8 +347,18 @@ __device__ inline static void load_lds_reg_col(RT &dst, const ST &src) {
 
 
 template<typename T2, int _rows, int _cols, ducks::rt_layout::classic layout>
-__device__ static inline rt<T2, _cols, _rows, typename ducks::rt_layout::transpose<layout>::type>& swap_layout_and_transpose_inplace(rt<T2, _rows, _cols, layout> &tile) {
-    return *(rt<T2, _cols, _rows, typename ducks::rt_layout::transpose<layout>::type>*)(&tile);
+__device__ static inline void swap_layout_and_transpose(rt<T2, _cols, _rows, typename ducks::rt_layout::transpose<layout>::type> &result, const rt<T2, _rows, _cols, layout> &tile) {
+
+    #pragma unroll
+    for (int i = 0; i < tile.height; i++) {
+        #pragma unroll
+        for (int j = 0; j < tile.width; j++) {
+            #pragma unroll
+            for (int k = 0; k < tile.packed_per_thread; k++) {
+                result.tiles[j][i].data[k] = tile.tiles[i][j].data[k];
+            }
+        }
+    }
 }
 
 template<int axis, ducks::rt::accumulator_layout RT, ducks::gl::all GL, ducks::coord::tile COORD=coord<RT>>
