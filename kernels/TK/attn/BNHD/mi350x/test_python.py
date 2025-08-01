@@ -23,13 +23,14 @@ torch.set_printoptions(
 # Inputs
 B = 16
 H = 16
+H_KV = 16
 N = 4096
 D = 64
 causal = False
 dtype = torch.bfloat16
 q = torch.randn(B, N, H, D, dtype=dtype, device='cuda', requires_grad=True)
-k = torch.randn(B, N, H, D, dtype=dtype, device='cuda', requires_grad=True)
-v = torch.randn(B, N, H, D, dtype=dtype, device='cuda', requires_grad=True)
+k = torch.randn(B, N, H_KV, D, dtype=dtype, device='cuda', requires_grad=True)
+v = torch.randn(B, N, H_KV, D, dtype=dtype, device='cuda', requires_grad=True)
 
 
 def flops(batch, seqlen, nheads, headdim, causal, mode="fwd"):

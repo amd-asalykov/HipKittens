@@ -131,17 +131,14 @@ __device__ inline void load_global_to_shared_direct(
 template<int axis, bool assume_aligned,
          ducks::st::all ST, ducks::gl::all GL,
          ducks::coord::tile COORD = coord<ST>,
-         int N_THREADS = WARP_THREADS, int offset_thread = 0>
+         int N_THREADS = WARP_THREADS>
 __device__ inline void prefill_swizzled_offsets(
     const GL& src, const COORD& idx, ST& dst, uint32_t* swizzled_offsets)
 {
 
-    if ((threadIdx.x-offset_thread) >= N_THREADS) {
-        return;
-    }
-
     using T = typename ST::dtype;
     constexpr int memcpy_per_tile = ST::rows * ST::cols * sizeof(T) / (16 * N_THREADS); // 2
+    static_assert(memcpy_per_tile > 0, "memcpy_per_tile must be greater than 0. Please decrease the number of threads.");
     
     constexpr int elem_per_thread = 16 / sizeof(T);  // e.g., 8 for bf16, 4 for fp32
     constexpr int threads_per_row = ST::cols / elem_per_thread; 
@@ -149,7 +146,7 @@ __device__ inline void prefill_swizzled_offsets(
     const int row_stride = src.template stride<axis>();
 
     uint32_t dst_ptr = reinterpret_cast<uintptr_t>(&dst.data[0]);
-    int thread_id = (threadIdx.x-offset_thread) % N_THREADS;
+    int thread_id = threadIdx.x % N_THREADS;
     int warp_id = thread_id >> 6;
 
     #pragma unroll
@@ -169,18 +166,15 @@ __device__ inline void prefill_swizzled_offsets(
 template<int axis, bool assume_aligned,
          ducks::st::all ST, ducks::gl::all GL,
          ducks::coord::tile COORD = coord<ST>,
-         int N_THREADS = WARP_THREADS, int offset_thread = 0>
+         int N_THREADS = WARP_THREADS>
 __device__ inline void load_global_to_shared_direct_with_swizzled_offsets(
     const GL& src, const COORD& idx, ST& dst, uint32_t* swizzled_offsets)
 {
 
-    if ((threadIdx.x-offset_thread) >= N_THREADS) {
-        return;
-    }
-
     using T = typename ST::dtype;
     constexpr int bytes_per_memcpy = 16 * N_THREADS;
     constexpr int memcpy_per_tile = ST::rows * ST::cols * sizeof(T) / bytes_per_memcpy;
+    static_assert(memcpy_per_tile > 0, "memcpy_per_tile must be greater than 0. Please decrease the number of threads.");
     
     constexpr int elem_per_thread = 16 / sizeof(T);  // e.g., 8 for bf16, 4 for fp32
     constexpr int elem_per_warp = elem_per_thread * kittens::WARP_THREADS;
@@ -190,7 +184,7 @@ __device__ inline void load_global_to_shared_direct_with_swizzled_offsets(
     T* global_ptr = (T*)&src[unit_coord];
     i32x4 srsrc = make_srsrc(global_ptr, row_stride * ST::rows * sizeof(T));
 
-    const int thread_id = (threadIdx.x-offset_thread) % N_THREADS;
+    const int thread_id = threadIdx.x % N_THREADS;
     const int warp_id = thread_id >> 6;
 
     #pragma unroll
@@ -344,7 +338,7 @@ __device__ inline static void load_lds_reg_col(RT &dst, const ST &src) {
 }
 
 
-template<typename T2, int _rows, int _cols, ducks::rt_layout::classic layout>
+template<typename T2, int _rows, int _cols, ducks::rt_layout::all layout>
 __device__ static inline void swap_layout_and_transpose(rt<T2, _cols, _rows, typename ducks::rt_layout::transpose<layout>::type> &result, const rt<T2, _rows, _cols, layout> &tile) {
 
     #pragma unroll
@@ -368,23 +362,21 @@ __device__ inline static void store_transposed(const GL &dst, const RT &src, con
     const int row_stride = dst.template stride<axis>();
     int laneid = kittens::laneid();
 
-    int col_offset = laneid/32;
+    int col_offset = (laneid/32) * 4;
     int row_offset = laneid%32;
 
     #pragma unroll
     for(int i = 0; i < src.height; i++) {
-        int global_col = src.tile_size_row * i;
+        int row = src.tile_size_row * i + row_offset;
         #pragma unroll
         for(int j = 0; j < src.width; j++) {
-            int row = src.tile_size_col * j + row_offset;
+            int col = src.tile_size_col * j + col_offset;
             #pragma unroll
             for (int jj = 0; jj < 4; jj++) {
-                int col = global_col + jj * 8 + col_offset * 4;
-
-                dst_ptr[row*row_stride + col + 0] = base_types::convertor<U, T>::convert(src.tiles[i][j].data[jj * 2].x);
-                dst_ptr[row*row_stride + col + 1] = base_types::convertor<U, T>::convert(src.tiles[i][j].data[jj * 2].y);
-                dst_ptr[row*row_stride + col + 2] = base_types::convertor<U, T>::convert(src.tiles[i][j].data[jj * 2 + 1].x);
-                dst_ptr[row*row_stride + col + 3] = base_types::convertor<U, T>::convert(src.tiles[i][j].data[jj * 2 + 1].y);
+                dst_ptr[row*row_stride + col + (jj * 8) + 0] = base_types::convertor<U, T>::convert(src.tiles[i][j].data[jj * 2].x);
+                dst_ptr[row*row_stride + col + (jj * 8) + 1] = base_types::convertor<U, T>::convert(src.tiles[i][j].data[jj * 2].y);
+                dst_ptr[row*row_stride + col + (jj * 8) + 2] = base_types::convertor<U, T>::convert(src.tiles[i][j].data[jj * 2 + 1].x);
+                dst_ptr[row*row_stride + col + (jj * 8) + 3] = base_types::convertor<U, T>::convert(src.tiles[i][j].data[jj * 2 + 1].y);
             }
         }
     }

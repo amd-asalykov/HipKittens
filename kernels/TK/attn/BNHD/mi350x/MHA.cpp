@@ -99,8 +99,8 @@ __global__ void attend_ker(const attn_globals<D> g) {
 
     uint32_t swizzled_offsets_V[memcpy_per_tile];
     uint32_t swizzled_offsets_K[memcpy_per_tile];
-    prefill_swizzled_offsets<1, false, st_bf<N_STEP, ATTN_D>, _gl_QKVO, coord<st_bf<N_STEP, ATTN_D>>, NUM_THREADS>(g.Kg, {batch_idx, head_idx, 0, 0}, k_smem[tic], swizzled_offsets_K);
-    prefill_swizzled_offsets<1, false, st_bf<N_STEP, ATTN_D>, _gl_QKVO, coord<st_bf<N_STEP, ATTN_D>>, NUM_THREADS>(g.Vg, {batch_idx, head_idx, 0, 0}, v_smem[tic], swizzled_offsets_V);
+    prefill_swizzled_offsets<1, false, st_bf<N_STEP, ATTN_D>, _gl_QKVO, coord<st_bf<N_STEP, ATTN_D>>, NUM_THREADS>(g.Kg, {batch_idx, 0, head_idx, 0}, k_smem[tic], swizzled_offsets_K);
+    prefill_swizzled_offsets<1, false, st_bf<N_STEP, ATTN_D>, _gl_QKVO, coord<st_bf<N_STEP, ATTN_D>>, NUM_THREADS>(g.Vg, {batch_idx, 0, head_idx, 0}, v_smem[tic], swizzled_offsets_V);
 
     // Pre-scale Q by temperature
     qkvo_tile<D, float> q_reg_fl;
@@ -216,7 +216,8 @@ __global__ void attend_ker(const attn_globals<D> g) {
     div_col(o_reg, o_reg, norm_vec);
 
     // 17. Store O_i back to global memory.
-    qkvo_tile<D, float, accum_l> o_reg_transposed = *(qkvo_tile<D, float, accum_l>*)&o_reg;
+    qkvo_tile<D, float, accum_l> o_reg_transposed;
+    swap_layout_and_transpose(o_reg_transposed, o_reg);
     store_transposed(g.Og, o_reg_transposed, {batch_idx, tile_idx, head_idx, 0});
 }
 
