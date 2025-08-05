@@ -188,6 +188,7 @@ __device__ inline float2 packed_shfl<float2>(uint64_t mask, const float2 &f, int
     return r;
 }
 
+using bytes_4  = HIP_vector_type<float, 1>;
 using bytes_8  = HIP_vector_type<float, 2>;
 using bytes_16 = HIP_vector_type<float, 4>;
 using bytes_32 = HIP_vector_type<float, 8>;

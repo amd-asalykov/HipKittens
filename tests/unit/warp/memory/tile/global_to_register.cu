@@ -14,7 +14,7 @@ struct g2r_wrapper_2d {
         this_result.label = generate_test_name<H,W,NUM_WORKERS,args...>(test::test_identifier);
         if constexpr (test::template valid<H, W, NUM_WORKERS, args...>::value) {
             constexpr int B = 1, D = 1, R = 1, C = 1;
-            constexpr int SIZE = H*W*512 * B * D * R * C;
+            constexpr int SIZE = H*W*256 * B * D * R * C;
             // initialize
             dtype *d_i, *d_o;
             std::vector<float> i_ref(SIZE);
@@ -60,6 +60,10 @@ struct load_store {
         kittens::rt_bf<16*H, 16*W, L> reg_tile;
         for(int i = 0; i < input.batch(); i++) for(int j = 0; j < input.depth(); j++) for(int k = 0; k < input.rows()/reg_tile.rows; k++) for(int l = 0; l < input.cols()/reg_tile.cols; l++) {
             kittens::load(reg_tile, input, {i, j, k, l});
+            // __syncthreads();
+            // if (kittens::warpid() == 0 && kittens::laneid() == 0) {
+            //     printf("reg_tile: %f\n", kittens::base_types::convertor<float, kittens::bf16>::convert(reg_tile.tiles[0][0].data[1].x));
+            // }
             kittens::store(output, reg_tile, {i, j, k, l});
         }
     }
