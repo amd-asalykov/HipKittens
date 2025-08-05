@@ -96,6 +96,8 @@ __global__ void attend_ker(const attn_globals<D> g) {
     // All warps then collaboratively load in the first slice of V (V0) and the second slice of K (K1) into shared memory
     load_global_to_shared_direct_with_swizzled_offsets<1, false, st_bf<KV_BLOCK_SIZE, ATTN_D>, _gl_QKVO, coord<st_bf<KV_BLOCK_SIZE,ATTN_D>>, NUM_THREADS>(
         g.Kg, {batch_idx, 1, head_idx_kv, 0}, k_smem[1], swizzled_offsets_K);
+    __builtin_amdgcn_s_waitcnt(0);
+    __builtin_amdgcn_s_barrier();
     load_global_to_shared_direct_with_swizzled_offsets<1, false, st_bf<KV_BLOCK_SIZE, ATTN_D>, _gl_QKVO, coord<st_bf<KV_BLOCK_SIZE,ATTN_D>>, NUM_THREADS>(
         g.Vg, {batch_idx, 0, head_idx_kv, 0}, v_smem[0], swizzled_offsets_V);
 
