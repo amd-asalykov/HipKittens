@@ -201,6 +201,13 @@ __device__ inline void load_global_to_shared_direct(
 //     }
 // }
 
+__device__ inline int get_accum_thread_row_offset(int row) {
+    // x in [0..15]
+    return ((row & 4) << 1)   // bit-2 → bit-3
+            | ((row & 8) >> 1)   // bit-3 → bit-2
+            | ( row & 3 );       // bits-0..1 unchanged
+}
+
 // Direct global-to-shared load using buffer load to LDS
 template<int axis, bool assume_aligned,
          ducks::rt::all RT, ducks::st::all ST, ducks::gl::all GL,
@@ -248,7 +255,13 @@ __device__ inline void prefill_swizzled_offsets(
             col_offset = warp_col_offset + (laneid() % 4) * elem_per_thread;
             row_offset = warp_row_offset + (laneid() / 4);
         } else {
-            static_assert(false, "Unsupported layout");
+            const int register_subtile_rows = kittens::TILE_ROW_DIM<T> / num_register_subtiles;
+            const int num_register_subtiles_per_row = num_register_tiles_per_row;
+            const int warp_col_offset = (register_tile_id % num_register_subtiles_per_row) * kittens::TILE_COL_DIM<T>;
+            const int warp_row_offset = ((register_tile_id / num_register_subtiles_per_row) * num_register_subtiles + register_subtile_id) * register_subtile_rows;
+    
+            col_offset = warp_col_offset + (laneid() % 4) * elem_per_thread;
+            row_offset = warp_row_offset + get_accum_thread_row_offset(laneid() / 4);
         }
 
         const int offset_in_global = (row_offset * row_stride + col_offset) * sizeof(T);

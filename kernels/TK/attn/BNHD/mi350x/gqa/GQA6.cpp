@@ -70,7 +70,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     uint32_t swizzled_offsets_V[memcpy_per_tile];
     uint32_t swizzled_offsets_K[memcpy_per_tile];
     prefill_swizzled_offsets<1, false, rt_bf<KV_BLOCK_SIZE, ATTN_D>, st_bf<KV_BLOCK_SIZE, ATTN_D>, _gl_QKVO, coord<st_bf<KV_BLOCK_SIZE, ATTN_D>>, NUM_THREADS>(g.Kg, {batch_idx, 0, head_idx_kv, 0}, k_smem[0], swizzled_offsets_K);
-    prefill_swizzled_offsets<1, false, rt_bf<KV_BLOCK_SIZE, ATTN_D, ducks::rt_layout::col>, st_bf<KV_BLOCK_SIZE, ATTN_D>, _gl_QKVO, coord<st_bf<KV_BLOCK_SIZE, ATTN_D>>, NUM_THREADS>(g.Vg, {batch_idx, 0, head_idx_kv, 0}, v_smem[0], swizzled_offsets_V);
+    prefill_swizzled_offsets<1, false, rt_bf<KV_BLOCK_SIZE, ATTN_D, ducks::rt_layout::accumulator>, st_bf<KV_BLOCK_SIZE, ATTN_D>, _gl_QKVO, coord<st_bf<KV_BLOCK_SIZE, ATTN_D>>, NUM_THREADS>(g.Vg, {batch_idx, 0, head_idx_kv, 0}, v_smem[0], swizzled_offsets_V);
 
     load_global_to_shared_direct_with_swizzled_offsets<1, false, st_bf<KV_BLOCK_SIZE, ATTN_D>, _gl_QKVO, coord<st_bf<KV_BLOCK_SIZE,ATTN_D>>, NUM_THREADS>(
         g.Kg, {batch_idx, 0, head_idx_kv, 0}, k_smem[0], swizzled_offsets_K);
@@ -140,7 +140,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
         mul(norm_vec, norm_vec, max_vec_prev);
         col_sum(norm_vec, att_block[0], norm_vec);
         copy(att_block_bf16, att_block[0]);
-        att_block_col_bf16 = swap_layout_inplace<col_l>(att_block_bf16);
+        att_block_col_bf16 = *(attn_tile<D, bf16, col_l>*)(&att_block_bf16);
         __builtin_amdgcn_sched_barrier(0);
         __builtin_amdgcn_s_barrier();
         __builtin_amdgcn_sched_barrier(0);
@@ -191,7 +191,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
         mul(norm_vec, norm_vec, max_vec_prev);
         col_sum(norm_vec, att_block[1], norm_vec);
         copy(att_block_bf16, att_block[1]);
-        att_block_col_bf16 = swap_layout_inplace<col_l>(att_block_bf16);
+        att_block_col_bf16 = *(attn_tile<D, bf16, col_l>*)(&att_block_bf16);
         __builtin_amdgcn_sched_barrier(0);
         __builtin_amdgcn_s_barrier();
         __builtin_amdgcn_sched_barrier(0);
@@ -244,7 +244,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     mul(norm_vec, norm_vec, max_vec_prev);
     col_sum(norm_vec, att_block[0], norm_vec);
     copy(att_block_bf16, att_block[0]);
-    att_block_col_bf16 = swap_layout_inplace<col_l>(att_block_bf16);
+    att_block_col_bf16 = *(attn_tile<D, bf16, col_l>*)(&att_block_bf16);
     __builtin_amdgcn_sched_barrier(0);
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
@@ -295,7 +295,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     mul(norm_vec, norm_vec, max_vec_prev);
     col_sum(norm_vec, att_block[1], norm_vec);
     copy(att_block_bf16, att_block[1]);
-    att_block_col_bf16 = swap_layout_inplace<col_l>(att_block_bf16);
+    att_block_col_bf16 = *(attn_tile<D, bf16, col_l>*)(&att_block_bf16);
     __builtin_amdgcn_sched_barrier(0);
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
@@ -343,7 +343,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     mul(norm_vec, norm_vec, max_vec_prev);
     col_sum(norm_vec, att_block[0], norm_vec);
     copy(att_block_bf16, att_block[0]);
-    att_block_col_bf16 = swap_layout_inplace<col_l>(att_block_bf16);
+    att_block_col_bf16 = *(attn_tile<D, bf16, col_l>*)(&att_block_bf16);
     __builtin_amdgcn_sched_barrier(0);
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
@@ -370,7 +370,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     mul(norm_vec, norm_vec, max_vec_prev);
     col_sum(norm_vec, att_block[1], norm_vec);
     copy(att_block_bf16, att_block[1]);
-    att_block_col_bf16 = swap_layout_inplace<col_l>(att_block_bf16);
+    att_block_col_bf16 = *(attn_tile<D, bf16, col_l>*)(&att_block_bf16);
     __builtin_amdgcn_sched_barrier(0);
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
