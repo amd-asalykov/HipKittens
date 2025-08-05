@@ -85,21 +85,18 @@ __global__ void attend_ker(const attn_globals<D> g) {
     zero(o_reg);
     zero(norm_vec);
     neg_infty(max_vec);
-
-    // All warps then load in the first slice of K (K0)
-    __builtin_amdgcn_s_waitcnt(0);
-    __builtin_amdgcn_s_barrier();
-    __builtin_amdgcn_sched_barrier(0);
-    load_lds_reg_row(k_reg, k_smem[0]);
-    __builtin_amdgcn_sched_barrier(0);
+    neg_infty(max_vec_prev);
 
     // All warps then collaboratively load in the first slice of V (V0) and the second slice of K (K1) into shared memory
     load_global_to_shared_direct_with_swizzled_offsets<1, false, st_bf<KV_BLOCK_SIZE, ATTN_D>, _gl_QKVO, coord<st_bf<KV_BLOCK_SIZE,ATTN_D>>, NUM_THREADS>(
         g.Kg, {batch_idx, 1, head_idx_kv, 0}, k_smem[1], swizzled_offsets_K);
-    __builtin_amdgcn_s_waitcnt(0);
-    __builtin_amdgcn_s_barrier();
+    // All warps then load in the first slice of K (K0)
     load_global_to_shared_direct_with_swizzled_offsets<1, false, st_bf<KV_BLOCK_SIZE, ATTN_D>, _gl_QKVO, coord<st_bf<KV_BLOCK_SIZE,ATTN_D>>, NUM_THREADS>(
         g.Vg, {batch_idx, 0, head_idx_kv, 0}, v_smem[0], swizzled_offsets_V);
+    load_lds_reg_row(k_reg, k_smem[0]);
+    __builtin_amdgcn_s_waitcnt(0);
+    __builtin_amdgcn_sched_barrier(0);
+    __builtin_amdgcn_s_barrier();
 
     // Each warp performs QK0
     asm volatile("s_waitcnt lgkmcnt(0)");
@@ -108,7 +105,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     mma_AtB(att_block[0], k_reg_transposed, q_reg_transposed, att_block[0]);
 
     // Each warp performs a partial softmax of QK0 (i.e. some of the online softmax up until but not including the second exponential scaling of the attention block likely)
-    copy(max_vec_prev, max_vec);
+    // copy(max_vec_prev, max_vec);
     col_max(max_vec, att_block[0], max_vec);
     sub_col(att_block[0], att_block[0], max_vec);
     exp2(att_block[0], att_block[0]);
@@ -126,6 +123,9 @@ __global__ void attend_ker(const attn_globals<D> g) {
         g.Vg, {batch_idx, 1, head_idx_kv, 0}, v_smem[1], swizzled_offsets_V);
     // All warps then load in the second slice of K (K1)
     load_lds_reg_row(k_reg, k_smem[1]);
+    __builtin_amdgcn_sched_barrier(0);
+    __builtin_amdgcn_s_barrier();
+    __builtin_amdgcn_sched_barrier(0);
 
     // hot loop
     for (int j = 3; j < num_tiles - 1; j += 2) {
@@ -183,7 +183,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
 
         // Cluster 4:
         //      QK2
-        asm volatile("s_waitcnt lgkmcnt(0)");
+        // asm volatile("s_waitcnt lgkmcnt(0)");
         zero(att_block[0]);
         swap_layout_and_transpose(k_reg_transposed, k_reg);
         mma_AtB(att_block[0], k_reg_transposed, q_reg_transposed, att_block[0]);
