@@ -131,6 +131,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     // hot loop
     #pragma unroll (1)
     for (int j = 3; j < num_tiles - 1; j += 2) {
+        const bool first_iter = (j == 3);
 
         // Cluster 0:
         //      QK1
@@ -138,7 +139,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
         zero(att_block[1]);
         mma_AtB(att_block[1], k_reg_transposed, q_reg_transposed, att_block[1]);
         //      Finish softmax for QK0
-        if (j > 3) {
+        if (__builtin_expect(!first_iter, 1)) {
             sub(max_vec_prev, max_vec_prev, max_vec); 
             exp2(max_vec_prev, max_vec_prev);  
             mul(norm_vec, norm_vec, max_vec_prev);
@@ -164,7 +165,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
         //      A0V0
         asm volatile("s_waitcnt lgkmcnt(0)");
         __builtin_amdgcn_s_setprio(1);
-        if (j > 3) {
+        if (!first_iter) {
             mul_col(o_reg, o_reg, max_vec_prev);
         }
         mma_AtB(o_reg, v_reg, att_block_col_bf16, o_reg);
