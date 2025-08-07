@@ -266,9 +266,9 @@ __device__ inline static void store(const GL &dst, const RT &src, const COORD &i
                     *(bytes_16*)&dst_ptr[row*row_stride + col] = *(bytes_16*)tmp;
                 }
                 else { // float2
-                    *(bytes_16*)&dst_ptr[row*row_stride + col] = *(bytes_16*)tmp;
+                    *(bytes_16*)&dst_ptr[row*row_stride + col] = *(bytes_16*)&tmp[0];
+                    *(bytes_16*)&dst_ptr[row*row_stride + col + 4] = *(bytes_16*)&tmp[2];
                 }
-
 
                 #else
 

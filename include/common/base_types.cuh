@@ -371,5 +371,37 @@ template<> struct convertor<half_2, bf16_2> {
         return __float22half2_rn(__bfloat1622float2(u));
     }
 };
+
+#ifdef KITTENS_CDNA4
+template<> struct convertor<fp6_e2m3_4, float4> {
+    static __host__ __device__ inline fp6_e2m3_4 convert(const float4& u) {
+        return __hip_fp6x4_e2m3(u); 
+    }
+};
+template<> struct convertor<float4, fp6_e2m3_4> {
+    static __host__ __device__ inline float4 convert(const fp6_e2m3_4& u) {
+        __hip_fp6_e2m3 *vals = reinterpret_cast<__hip_fp6_e2m3*>(const_cast<__hip_fp6x4_e2m3*>(&u));
+        return make_float4(float(vals[0]), float(vals[1]), float(vals[2]), float(vals[3]));
+    }
+};
+template<> struct convertor<fp6_e2m3, float> {
+    static __host__ __device__ inline fp6_e2m3 convert(const float & u) {
+        return __hip_fp6_e2m3(u);
+    }
+};
+template<> struct convertor<float, fp6_e2m3> {
+    static __host__ __device__ inline float convert(const fp6_e2m3 & u) {
+        return float(u);
+    }
+};
+template<> struct convertor<float2, fp6_e2m3_4> {
+    static __host__ __device__ inline float2 convert(const fp6_e2m3_4& u) {
+        __hip_fp6_e2m3 *vals = reinterpret_cast<__hip_fp6_e2m3*>(const_cast<__hip_fp6x4_e2m3*>(&u));
+        return make_float2(float(vals[0]), float(vals[1]));
+    }
+};
+#endif
+
+
 }
 }
