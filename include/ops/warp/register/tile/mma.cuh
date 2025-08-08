@@ -63,24 +63,75 @@ __device__ static inline void mfma323264_fp6(      float2 (&D)[8],
                                              const fp6_e2m3_4 (&B)[8],
                                              const float2 (&C)[8]) {
 
-    typedef __attribute__((__vector_size__(32))) uint8_t uint8x32_t;
+    // Each lane provides 32 FP6 values per operand. AMD ISA requires dense 6-bit packing
+    // across six contiguous 32-bit registers, but the builtin expects 8x int32 vector (32 bytes)
+    auto repack_8x_fp6x4_to_int8 = [] __device__ (const fp6_e2m3_4 (&src)[8]) {
+        uint32_t dense[8] = {0}; // 8 words to match builtin expectation, pad with zeros
+        
+        // Extract 32 FP6 values from 8 packs. Treat each pack as 4 bytes
+        // and take the low 6 bits of each byte.
+        uint32_t vals6[32];
+        #pragma unroll
+        for (int p = 0; p < 8; ++p) {
+            uint32_t raw = std::bit_cast<uint32_t>(src[p]);
+            vals6[p * 4 + 0] = (raw >> 0)  & 0x3Fu;   // byte0 low 6
+            vals6[p * 4 + 1] = (raw >> 8)  & 0x3Fu;   // byte1 low 6
+            vals6[p * 4 + 2] = (raw >> 16) & 0x3Fu;   // byte2 low 6
+            vals6[p * 4 + 3] = (raw >> 24) & 0x3Fu;   // byte3 low 6
+        }
+
+        // Pack 32 x 6-bit values contiguously into first 6 u32 words (192 bits)
+        // The hardware only uses the first 192 bits, last 2 words are padding
+        #pragma unroll
+        for (int i = 0; i < 32; ++i) {
+            const uint32_t v = vals6[i] & 0x3Fu;
+            const int bit_pos = i * 6;               // 0..186
+            const int word_idx = bit_pos >> 5;       // /32
+            const int bit_off  = bit_pos & 31;       // %32
+
+            if (word_idx < 6) { // Only pack into first 6 words
+                dense[word_idx] |= (v << bit_off);
+                const int spill = bit_off + 6 - 32;
+                if (spill > 0 && word_idx + 1 < 6) {
+                    dense[word_idx + 1] |= (v >> (6 - spill));
+                }
+            }
+        }
+
+        // Return as the expected 8x int32 vector type
+        typedef __attribute__((__vector_size__(8 * sizeof(int)))) int int8_t;
+        
+        // Use a union to safely convert
+        union {
+            uint32_t arr[8];
+            int8_t vec;
+        } converter;
+        
+        #pragma unroll
+        for (int i = 0; i < 8; ++i) {
+            converter.arr[i] = dense[i];
+        }
+        
+        return converter.vec;
+    };
+
     typedef __attribute__((__vector_size__(16 * sizeof(float)))) float floatx16_t;
-    typedef __attribute__((__vector_size__(8 * sizeof(int32_t)))) int32_t int32x8_t;
-    
-    // Option 1: Try direct cast (simplest approach)
+
+    auto a_packed = repack_8x_fp6x4_to_int8(A);
+    auto b_packed = repack_8x_fp6x4_to_int8(B);
+
     *(floatx16_t*)D = __builtin_amdgcn_mfma_scale_f32_32x32x64_f8f6f4(
-        *(uint8x32_t*)A,
-        *(uint8x32_t*)B,
+        a_packed,
+        b_packed,
         *(floatx16_t*)C,
-        2, // cbsz for FP6 E2M3
-        2, // blgp for FP6 E2M3  
+        2, // cbsz for FP6 E2M3 (log2(4) chunks)
+        2, // blgp for FP6 E2M3 permutation
         0, // OpselA
         0, // scale_a (0 means no scaling)
         0, // OpselB
         0  // scale_b (0 means no scaling)
     );
 }
-
 #else
 __device__ static inline void mfma161616(      float2 (&D)[2],
                                          const half_2 (&A)[2],
