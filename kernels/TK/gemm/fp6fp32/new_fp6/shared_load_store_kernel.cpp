@@ -4,15 +4,15 @@
 using namespace kittens;
 
 
-#define NUM_WARPS 2
+#define NUM_WARPS 8
 #define NUM_THREADS (kittens::WARP_THREADS * NUM_WARPS)
 
-#define M 64
-#define K 64
+#define M 8192
+#define K 8192
 
-#define BLOCK_SIZE 64
-#define K_STEP 64
-#define REG_BLOCK_M 32
+#define BLOCK_SIZE 256
+#define K_STEP 128
+#define REG_BLOCK_M 128
 #define DOT_SLICE 64
 
 using din = fp6_e2m3;
@@ -42,7 +42,7 @@ void micro_tk(const micro_globals g) {
 
     // Info
     const int warp_id = warpid();
-    const int warp_row = warp_id;
+    const int warp_row = warp_id / 4;
     const int num_tiles = K / K_STEP;
     const int num_slices = K_STEP / DOT_SLICE;
 
@@ -197,13 +197,13 @@ int main() {
     //     }
     // }
     // print entire output array
-    std::cout << "Output array:" << std::endl;
-    for (int i = 0; i < M * K; i++) {
-        std::cout << float(h_output[i]) << " ";
-        if ((i + 1) % K == 0) {
-            std::cout << std::endl;
-        }
-    }
+    // std::cout << "Output array:" << std::endl;
+    // for (int i = 0; i < M * K; i++) {
+    //     std::cout << float(h_output[i]) << " ";
+    //     if ((i + 1) % K == 0) {
+    //         std::cout << std::endl;
+    //     }
+    // }
 
     std::cout << "Number of correct: " << large_diffs << " / " << M * K << std::endl;
 
