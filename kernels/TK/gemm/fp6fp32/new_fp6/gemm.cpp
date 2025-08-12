@@ -1,7 +1,6 @@
 
 #include "kittens.cuh"
 #include "utils.cpp"
-#include <chrono>
 #include <random>
 #include <omp.h>
 #include <cstring>
@@ -23,6 +22,7 @@ constexpr int K_STEP           = 128;
 constexpr int REG_BLOCK_M      = BLOCK_SIZE / 2;
 constexpr int REG_BLOCK_N      = BLOCK_SIZE / 4;
 constexpr int DOT_SLICE        = 64;
+              
 
 #define NUM_WARPS 8
 #define NUM_THREADS (kittens::WARP_THREADS * NUM_WARPS)
@@ -31,9 +31,9 @@ constexpr int DOT_SLICE        = 64;
 #define K 8192
 #define N 8192
 
-using _gl_A = gl<fp6_e2m3, -1, -1, -1, -1>;
-using _gl_B = gl<fp6_e2m3, -1, -1, -1, -1>;
-using _gl_C = gl<float, -1, -1, -1, -1>;
+using _gl_A = gl<din, -1, -1, -1, -1>;
+using _gl_B = gl<din, -1, -1, -1, -1>;
+using _gl_C = gl<dout, -1, -1, -1, -1>;
 
 using G = kittens::group<NUM_WARPS>;
 
@@ -92,8 +92,8 @@ void micro_tk(const micro_globals g) {
 
     int tic = 0;
     int toc = 1;
-    constexpr int elems_per_thread = 16;
-    constexpr int memcpy_per_tile =  (BLOCK_SIZE * K_STEP) / (elems_per_thread * NUM_THREADS);
+    constexpr int bytes_per_thread = 12;
+    constexpr int memcpy_per_tile = (BLOCK_SIZE * K_STEP * 6 / 8) / (bytes_per_thread * NUM_THREADS);
 
 
     // Register array to store swizzled global addresses for each thread.
@@ -142,6 +142,8 @@ void micro_tk(const micro_globals g) {
         mma_ABt(C_accum, A_tile, B_tile, C_accum);
         __builtin_amdgcn_s_setprio(0);
         __builtin_amdgcn_s_barrier();
+
+        
     }
 
     // Epilogue
@@ -209,6 +211,14 @@ int main() {
     din *h_input_b = new din[N * K];
     dout *h_output = new dout[M * N];
 
+    // Benchmarking variables
+    double gemm_flops = 2.0 * double(M) * double(N) * double(K);
+    hipStream_t stream;
+    HIP_CHECK( hipStreamCreate(&stream) );
+    hipEvent_t start, stop;
+    HIP_CHECK( hipEventCreate(&start) );
+    HIP_CHECK( hipEventCreate(&stop) );
+
     // Calculate sizes for packed FP6 data
     int total_bytes_a = ( M * K * 6 ) / 8;
     int total_bytes_b = ( N * K * 6 ) / 8;
@@ -222,7 +232,7 @@ int main() {
     // random number generator
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(-1.0f, 1.0f);
+    std::uniform_real_distribution<> dis(-0.0f, 4.0f);
 
     // Initialize with different values
     for (int i = 0; i < M * K; i++) {
@@ -260,41 +270,38 @@ int main() {
     micro_globals globals{input_gl_a, input_gl_b, output_gl};
 
     // Warmup
-    std::cout << "Warming up...\n";
-    for (int i = 0; i < 5; i++) {
-        micro_tk<<<globals.grid(), globals.block(), globals.dynamic_shared_memory()>>>(globals);
+    // Warmup
+    const int WARMUP_REPS = 10;
+    for (int r = 0; r < WARMUP_REPS; ++r) { 
+        micro_tk<<<globals.grid(), globals.block(), globals.dynamic_shared_memory(), stream>>>(globals);
     }
     hipDeviceSynchronize();
 
-    // Benchmark kernel performance
-    const int num_iterations = 1000;
-    std::cout << "Benchmarking " << num_iterations << " iterations...\n";
-
-    auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < num_iterations; i++) {
-        micro_tk<<<globals.grid(), globals.block(), globals.dynamic_shared_memory()>>>(globals);
+    // Timed kernel-only loop
+    const int REPS = 50;
+    std::vector<float> times_ms;
+    times_ms.reserve(REPS);
+    for (int r = 0; r < REPS; ++r) {
+        HIP_CHECK( hipEventRecord(start, stream) );
+        micro_tk<<<globals.grid(), globals.block(), globals.dynamic_shared_memory(), stream>>>(globals);
+        HIP_CHECK( hipEventRecord(stop, stream) );
+        HIP_CHECK( hipEventSynchronize(stop) );
+        float ms = 0.0f;
+        HIP_CHECK( hipEventElapsedTime(&ms, start, stop) );
+        times_ms.push_back(ms);
     }
+
+    float sum_ms = 0.f, best_ms = 1e30f;
+    for (float t : times_ms) { sum_ms += t; best_ms = std::min(best_ms, t); }
+    float avg_ms = sum_ms / times_ms.size();
+    double tflops_best = (gemm_flops / (best_ms * 1e-3)) / 1e12;
+    double tflops_avg  = (gemm_flops / (avg_ms  * 1e-3)) / 1e12;
+    std::cout << "Kernel time (best): " << best_ms << " ms,  TFLOPs: " << tflops_best << "\n";
+    std::cout << "Kernel time (avg ): " << avg_ms  << " ms,  TFLOPs: " << tflops_avg  << "\n";
+
+    
+    hipMemcpy(h_output, d_output, M * N * sizeof(dout), hipMemcpyDeviceToHost);
     hipDeviceSynchronize();
-    auto end = std::chrono::high_resolution_clock::now();
-
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    double total_time_ms = duration.count() / 1000.0;
-    double avg_time_ms = total_time_ms / num_iterations;
-
-    // Calculate TFLOPS
-    // For FP6 GEMM: C = A * B^T, where A is M x K and B is N x K
-    // Operations: 2 * M * N * K multiply-adds = 2 * M * N * K operations
-    long long ops_per_kernel = 2LL * M * N * K;
-    double tflops = (ops_per_kernel * num_iterations) / (total_time_ms * 1e-3) / 1e12;
-
-    std::cout << "\n=== PERFORMANCE RESULTS ===\n";
-    std::cout << "Matrix size: " << M << "x" << N << "\n";
-    std::cout << "Total iterations: " << num_iterations << "\n";
-    std::cout << "Total time: " << total_time_ms << " ms\n";
-    std::cout << "Average time per kernel: " << avg_time_ms << " ms\n";
-    std::cout << "Operations per kernel: " << ops_per_kernel << "\n";
-    std::cout << "TFLOPS: " << std::fixed << std::setprecision(3) << tflops << "\n";
-    std::cout << "============================\n\n";
 
     // Check for kernel errors
     hipError_t err = hipGetLastError();
@@ -302,9 +309,6 @@ int main() {
         std::cerr << "Kernel launch failed: " << hipGetErrorString(err) << std::endl;
         return 1;
     }
-
-    // Copy result back
-    hipMemcpy(h_output, d_output, M * N * sizeof(dout), hipMemcpyDeviceToHost);
 
     // CPU reference: compute A * B^T
     std::cout << "Computing CPU reference...\n";
@@ -328,7 +332,7 @@ int main() {
         float h_output_float = float(h_output[i]);
         const float rtol = 0.1f;   // ~u with a little margin
         const float atol = 1e-2f;   // floor for tiny expected values
-        float diff = fabs(cpu_result[i] - h_output[i]);
+        float diff = fabs(cpu_result[i] - h_output_float);
         float threshold = rtol * fabs(cpu_result[i]) + atol;
         if (diff > threshold) {
             ++errors;
