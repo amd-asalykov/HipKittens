@@ -42,9 +42,19 @@ __device__ inline static void load(RT &dst, const GL &src, const COORD &idx) {
     int laneid = kittens::laneid();
 
     #ifdef KITTENS_CDNA4
-    int packed_size = sizeof(U2) / sizeof(U);
-    int row_offset = laneid%32, col_offset = 4 * packed_size *(laneid/32);
-    int REPEAT = 2;
+    int packed_size;
+    int row_offset;
+    int col_offset;
+    int REPEAT;
+    if (sizeof(U2) == 32) {
+        packed_size = sizeof(U2) / sizeof(U);
+        row_offset = laneid%32, col_offset = packed_size *(laneid/32);
+        REPEAT = 1;
+    } else {
+        packed_size = sizeof(U2) / sizeof(U);
+        row_offset = laneid%32, col_offset = 4 * packed_size * (laneid/32);
+        REPEAT = 2;
+    }
     #else
     int row_offset = laneid%16, col_offset = 4*(laneid/16);
     int REPEAT = 1;
@@ -97,8 +107,29 @@ __device__ inline static void load(RT &dst, const GL &src, const COORD &idx) {
                         dst.tiles[i][j].data[k] = base_types::convertor<T2, U2>::convert(tmp[k]);
                     }
                     #endif
-                }
 
+                } else if constexpr (sizeof(U2) == 32) {
+
+                    __uint128_t loaded1 = llvm_amdgcn_raw_buffer_load_b128(
+                        std::bit_cast<i32x4>(br),
+                        (row*row_stride + col) * sizeof(U),
+                        0,
+                        0
+                    );
+
+                    uint64_t loaded2 = llvm_amdgcn_raw_buffer_load_b64(
+                        std::bit_cast<i32x4>(br),
+                        (row*row_stride + col) * sizeof(U) + 16,  // offset by 16 bytes
+                        0,
+                        0
+                    );
+
+                    U2 tmp;
+                    *reinterpret_cast<__uint128_t*>(&tmp) = loaded1;  // bytes 0-15
+                    *reinterpret_cast<uint64_t*>(reinterpret_cast<char*>(&tmp) + 16) = loaded2;  // bytes 16-23
+                    dst.tiles[i][j].data[0] = base_types::convertor<T2, U2>::convert(tmp);
+
+                }
                 else { // float2 case
                     #ifdef KITTENS_CDNA4
                     float4 loaded1 = std::bit_cast<float4>(llvm_amdgcn_raw_buffer_load_b128(
@@ -261,9 +292,19 @@ __device__ inline static void store(const GL &dst, const RT &src, const COORD &i
     int laneid = kittens::laneid();
 
     #ifdef KITTENS_CDNA4
-    int packed_size = sizeof(U2) / sizeof(U);
-    int row_offset = laneid%32, col_offset = 4 * packed_size *(laneid/32);
-    int REPEAT = 2;
+    int packed_size;
+    int row_offset; 
+    int col_offset;
+    int REPEAT;
+    if (sizeof(U2) == 32) {
+        packed_size = sizeof(U2) / sizeof(U);
+        row_offset = laneid%32, col_offset = packed_size *(laneid/32);
+        REPEAT = 1;
+    } else {
+        packed_size = sizeof(U2) / sizeof(U);
+        row_offset = laneid%32, col_offset = 4 * packed_size * (laneid/32);
+        REPEAT = 2;
+    }
     #else
     int row_offset = laneid%16, col_offset = 4*(laneid/16);
     int REPEAT = 1;
@@ -286,7 +327,35 @@ __device__ inline static void store(const GL &dst, const RT &src, const COORD &i
                     for(int k = 0; k < 4; k++) {
                         tmp[k] = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[k + z*4]);
                     }
-                    *(bytes_16*)&dst_ptr[row*row_stride + col] = *(bytes_16*)tmp;
+                    *(bytes_16*)&dst_ptr[row*row_stride + col] = *(bytes_16*)&tmp[0]; // 
+                } else if constexpr (sizeof(U2) == 32) {  // fp6_e2m3_32 (32 bytes; 24 real bytes)
+
+                    U2 tmp;
+                    tmp = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[0]);
+
+                    uint32_t buffer_size = dst.batch() * dst.depth() * dst.rows() * dst.cols() * sizeof(U);
+                    std::uintptr_t as_int = reinterpret_cast<std::uintptr_t>(dst_ptr);
+                    std::uint64_t as_u64 = static_cast<std::uint64_t>(as_int);
+                    buffer_resource br = make_buffer_resource(as_u64, buffer_size, 0x00020000);
+
+                    // Store first 128 bits (16 bytes)
+                    llvm_amdgcn_raw_buffer_store_b128(
+                        *reinterpret_cast<__uint128_t*>(&tmp),
+                        std::bit_cast<i32x4>(br),
+                        (row*row_stride + col) * sizeof(U),
+                        0,
+                        0
+                    );
+
+                    // Store next 64 bits (8 bytes) to complete 24 bytes
+                    llvm_amdgcn_raw_buffer_store_b64(
+                        *reinterpret_cast<uint64_t*>((char*)&tmp + 16),
+                        std::bit_cast<i32x4>(br),
+                        (row*row_stride + col) * sizeof(U) + 16,
+                        0,
+                        0
+                    );
+
                 }
                 else { // float2
                     U2 tmp[4];
