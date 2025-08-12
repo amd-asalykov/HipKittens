@@ -174,14 +174,6 @@ int main() {
         }
     }
 
-    // print entire input array
-    std::cout << "Input array:" << std::endl;
-    for (int i = 0; i < SIZE * SIZE; i++) {
-        std::cout << float(h_input[i]) << " ";
-        if ((i + 1) % SIZE == 0) {
-            std::cout << std::endl;
-        }
-    }
     // print entire output array
     std::cout << "Output array:" << std::endl;
     for (int i = 0; i < SIZE * SIZE; i++) {

@@ -296,7 +296,7 @@ __device__ inline void load_global_to_shared_direct_with_swizzled_offsets_fp6(
      const uint32_t addr_b32 = reinterpret_cast<uintptr_t>(&src.data[0] + kittens::WARP_THREADS * 16 + laneid * 4);
      const uint32_t addr_b32_next = reinterpret_cast<uintptr_t>(&src.data[0] + kittens::WARP_THREADS * 20 + laneid * 4);
 
-     const int tile_stride = kittens::TILE_ROW_DIM<U> * kittens::TILE_COL_DIM<U> * sizeof(U);
+     const int tile_stride = kittens::TILE_ROW_DIM<U> * kittens::TILE_COL_DIM<U> * 6 / 8;
      const int row_stride = tile_stride * dst.width;
  
      #pragma unroll
@@ -342,12 +342,10 @@ __device__ inline static void store_fp6(const GL &dst, const RT &src, const COOR
         for(int j = 0; j < src.width; j++) {
             int col = src.tile_size_col*j + col_offset;
             
-            // const __uint128_t tmp = *reinterpret_cast<const __uint128_t*>((&src.tiles[i][j].data[0]));
-            const __uint128_t tmp = 1;
+            const __uint128_t tmp = *reinterpret_cast<const __uint128_t*>((&src.tiles[i][j].data[0]));
             llvm_amdgcn_raw_buffer_store_b128(tmp, srsrc, row*row_stride + col, 0, 0);
 
-            const uint64_t tmp_b64 = 1;
-            // const uint64_t tmp_b64 = *reinterpret_cast<const uint64_t*>((&src.tiles[i][j].data[16]));
+            const uint64_t tmp_b64 = *reinterpret_cast<const uint64_t*>((&src.tiles[i][j].data[16]));
             llvm_amdgcn_raw_buffer_store_b64(tmp_b64, srsrc, row*row_stride + col + 16, 0, 0);
         }
     }
