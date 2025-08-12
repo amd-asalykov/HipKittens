@@ -60,7 +60,12 @@ __device__ inline static void load(RT &dst, const GL &src, const COORD &idx) {
     int REPEAT = 1;
     #endif
 
-    uint32_t buffer_size = src.batch() * src.depth() * src.rows() * src.cols() * sizeof(U);
+    uint32_t buffer_size;
+    if (sizeof(U2) == 32) {
+        buffer_size = (src.batch() * src.depth() * src.rows() * src.cols() * 6 + 7) / 8;
+    } else {
+        buffer_size = src.batch() * src.depth() * src.rows() * src.cols() * sizeof(U);
+    }
     std::uintptr_t as_int = reinterpret_cast<std::uintptr_t>(src_ptr);
     std::uint64_t  as_u64 = static_cast<std::uint64_t>(as_int);    // widen if host is 32-bit
     buffer_resource br = make_buffer_resource(as_u64, buffer_size, 0x00020000);
@@ -110,24 +115,27 @@ __device__ inline static void load(RT &dst, const GL &src, const COORD &idx) {
 
                 } else if constexpr (sizeof(U2) == 32) {
 
-                    __uint128_t loaded1 = llvm_amdgcn_raw_buffer_load_b128(
-                        std::bit_cast<i32x4>(br),
-                        (row*row_stride + col) * sizeof(U),
-                        0,
-                        0
-                    );
-
-                    uint64_t loaded2 = llvm_amdgcn_raw_buffer_load_b64(
-                        std::bit_cast<i32x4>(br),
-                        (row*row_stride + col) * sizeof(U) + 16,  // offset by 16 bytes
-                        0,
-                        0
-                    );
-
-                    U2 tmp;
-                    *reinterpret_cast<__uint128_t*>(&tmp) = loaded1;  // bytes 0-15
-                    *reinterpret_cast<uint64_t*>(reinterpret_cast<char*>(&tmp) + 16) = loaded2;  // bytes 16-23
-                    dst.tiles[i][j].data[0] = base_types::convertor<T2, U2>::convert(tmp);
+                    int element_offset = row * row_stride + col;
+                     int byte_offset = (element_offset * 6) / 8;
+                     
+                     __uint128_t loaded1 = llvm_amdgcn_raw_buffer_load_b128(
+                         std::bit_cast<i32x4>(br),
+                         byte_offset,
+                         0,
+                         0
+                     );
+                     
+                     uint64_t loaded2 = llvm_amdgcn_raw_buffer_load_b64(
+                         std::bit_cast<i32x4>(br),
+                         byte_offset + 16,  // shift 16 bytes
+                         0,
+                         0
+                     );
+                     
+                     U2 tmp;
+                     *reinterpret_cast<__uint128_t*>(&tmp) = loaded1;  // bytes 0-15
+                     *reinterpret_cast<uint64_t*>(reinterpret_cast<char*>(&tmp) + 16) = loaded2;  // bytes 16-23
+                     dst.tiles[i][j].data[0] = base_types::convertor<T2, U2>::convert(tmp);
 
                 }
                 else { // float2 case
@@ -331,31 +339,32 @@ __device__ inline static void store(const GL &dst, const RT &src, const COORD &i
                 } else if constexpr (sizeof(U2) == 32) {  // fp6_e2m3_32 (32 bytes; 24 real bytes)
 
                     U2 tmp;
-                    tmp = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[0]);
-
-                    uint32_t buffer_size = dst.batch() * dst.depth() * dst.rows() * dst.cols() * sizeof(U);
-                    std::uintptr_t as_int = reinterpret_cast<std::uintptr_t>(dst_ptr);
-                    std::uint64_t as_u64 = static_cast<std::uint64_t>(as_int);
-                    buffer_resource br = make_buffer_resource(as_u64, buffer_size, 0x00020000);
-
-                    // Store first 128 bits (16 bytes)
-                    llvm_amdgcn_raw_buffer_store_b128(
-                        *reinterpret_cast<__uint128_t*>(&tmp),
-                        std::bit_cast<i32x4>(br),
-                        (row*row_stride + col) * sizeof(U),
-                        0,
-                        0
-                    );
-
-                    // Store next 64 bits (8 bytes) to complete 24 bytes
-                    llvm_amdgcn_raw_buffer_store_b64(
-                        *reinterpret_cast<uint64_t*>((char*)&tmp + 16),
-                        std::bit_cast<i32x4>(br),
-                        (row*row_stride + col) * sizeof(U) + 16,
-                        0,
-                        0
-                    );
-
+                     tmp = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[0]);
+ 
+                     // uint32_t buffer_size = dst.batch() * dst.depth() * dst.rows() * dst.cols() * sizeof(U);
+                     uint32_t buffer_size = (dst.batch() * dst.depth() * dst.rows() * dst.cols() * 6 + 7) / 8;
+                     std::uintptr_t as_int = reinterpret_cast<std::uintptr_t>(dst_ptr);
+                     std::uint64_t as_u64 = static_cast<std::uint64_t>(as_int);
+                     buffer_resource br = make_buffer_resource(as_u64, buffer_size, 0x00020000);
+ 
+                     int element_offset = row * row_stride + col;
+                     int byte_offset = (element_offset * 6) / 8;
+ 
+                     llvm_amdgcn_raw_buffer_store_b128(
+                         *reinterpret_cast<__uint128_t*>(&tmp),
+                         std::bit_cast<i32x4>(br),
+                         byte_offset,  // Use the correctly calculated offset
+                         0,
+                         0
+                     );
+ 
+                     llvm_amdgcn_raw_buffer_store_b64(
+                         *reinterpret_cast<uint64_t*>(reinterpret_cast<char*>(&tmp) + 16),
+                         std::bit_cast<i32x4>(br),
+                         byte_offset + 16,  // Just add 16 to byte_offset
+                         0,
+                         0
+                     );
                 }
                 else { // float2
                     U2 tmp[4];
