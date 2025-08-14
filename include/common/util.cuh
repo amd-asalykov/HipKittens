@@ -280,7 +280,11 @@ struct shared_allocator {
             align_ptr<default_alignment>();
             using at = variadic_array_t<A, dims...>;
             at*p = reinterpret_cast<at*>(ptr);
-            ptr += sizeof(at)/sizeof(int);
+            if constexpr (std::is_same_v<typename A::dtype, fp6_e2m3>) {
+                ptr += (sizeof(at) * 6 / 8)/sizeof(int);
+            } else {
+                ptr += sizeof(at)/sizeof(int);
+            }
             return *p;
         }
         /**
@@ -296,7 +300,11 @@ struct shared_allocator {
             align_ptr<alignment>();
             using at = variadic_array_t<A, dims...>;
             at*p = reinterpret_cast<at*>(ptr);
-            ptr += sizeof(at)/sizeof(int);
+            if constexpr (std::is_same_v<typename A::dtype, fp6_e2m3>) {
+                ptr += (sizeof(at) * 6 / 8)/sizeof(int);
+            } else {
+                ptr += sizeof(at)/sizeof(int);
+            }
             return *p;
         }
 };
