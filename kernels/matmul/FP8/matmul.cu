@@ -308,9 +308,9 @@ TimingResult matmul_ref(const std::vector<fp8e4m3>& a, const std::vector<fp8e4m3
 #endif
 
 template <int M, int N, int K>
-__global__ __launch_bounds__(512, 2) void matmul_device(const kittens::gl<fp8e4m3, 1, 1, M, K> A, const kittens::gl<fp8e4m3, 1, 1, N, K> B, const kittens::gl<bf16, 1, 1, M, N> C) {
+__global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m3, 1, 1, M, K> A, const kittens::gl<fp8e4m3, 1, 1, N, K> B, const kittens::gl<bf16, 1, 1, M, N> C) {
     constexpr int WARPS_COL = 2;
-    constexpr int WARPS_ROW = 4;
+    constexpr int WARPS_ROW = 2;
     constexpr int NUM_WARPS = WARPS_COL * WARPS_ROW;
     constexpr int BLOCK_SIZE_ROW = 256;
     constexpr int BLOCK_SIZE_COL = 256;
@@ -370,12 +370,6 @@ __global__ __launch_bounds__(512, 2) void matmul_device(const kittens::gl<fp8e4m
     load<2, false, kittens::ducks::rt_layout::row, st<fp8e4m3, BLOCK_SIZE_COL, BLOCK_K>, kittens::gl<fp8e4m3, 1, 1, N, K>, coord<st<fp8e4m3, BLOCK_SIZE_COL, BLOCK_K>>, NUM_WARPS*WARP_THREADS>(Bs[curr], B, {0, 0, block_col, 0});
     __builtin_amdgcn_s_waitcnt(0);
     __builtin_amdgcn_sched_barrier(0);
-
-    // Two stage pipeline
-    if (2*warpid() / NUM_WARPS == 1) {
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_sched_barrier(0);
-    }
 
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
@@ -451,17 +445,13 @@ __global__ __launch_bounds__(512, 2) void matmul_device(const kittens::gl<fp8e4m
 
     // Store result: each warp stores its 64x64 result
     store(C, c, {0, 0, block_row * WARPS_ROW + warp_m, block_col * WARPS_COL + warp_n});
-
-    if (2*warpid() / NUM_WARPS == 0) {
-        __builtin_amdgcn_s_barrier();
-    }
 }
 
 template <int M, int N, int K, int CUs>
 TimingResult matmul_host(const std::vector<fp8e4m3>& a, const std::vector<fp8e4m3>& b, std::vector<bf16>& c,
                         int warmup_iters = 3, int timing_iters = 20) {
     constexpr int threads_per_warp = 64;
-    constexpr int warps_per_cu = 8;
+    constexpr int warps_per_cu = 4;
     constexpr int threads_per_block = threads_per_warp * warps_per_cu;
     constexpr int threadblocks = 1024;
     
@@ -612,8 +602,8 @@ int main() {
     constexpr int warmup_iters = 2;
     constexpr int timing_iters = 1;
     #else
-    constexpr int warmup_iters = 200;
-    constexpr int timing_iters = 1000;
+    constexpr int warmup_iters = 5;
+    constexpr int timing_iters = 20;
     #endif
 
     printf("Matrix dimensions: %dx%dx%d, CUs: %d\n", M, N, K, CUs);
