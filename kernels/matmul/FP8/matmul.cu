@@ -422,6 +422,8 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
         constexpr int num_warps = NUM_WARPS;
         constexpr int num_register_subtiles = kittens::TILE_ROW_DIM<T> * kittens::TILE_COL_DIM<T> / elem_per_warp;
         constexpr int num_register_tiles_per_row = ST_A::cols / kittens::TILE_COL_DIM<T>;
+        constexpr int register_subtile_cols = kittens::TILE_COL_DIM<T> / num_register_subtiles;
+        constexpr int num_register_subtiles_per_row = num_register_tiles_per_row * num_register_subtiles;
 
         coord<> unit_coord = idx.template unit_coord<2, 3>();
         T* global_ptr = (T*)&src[unit_coord];
@@ -429,30 +431,33 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
 
         const T* lds_base = &dst.data[0] + (warp_id * elem_per_warp);
 
-        #pragma unroll
-        for (int i = 0; i < memcpy_per_tile; i++) {
-            const int register_tile_id = (warp_id + i * num_warps) / num_register_subtiles;
-            const int register_subtile_id = (warp_id + i * num_warps) % num_register_subtiles;
-
-            const int register_subtile_cols = kittens::TILE_COL_DIM<T> / num_register_subtiles;
-            const int num_register_subtiles_per_row = num_register_tiles_per_row * num_register_subtiles;
-            const int warp_col_offset = ((register_tile_id % num_register_tiles_per_row) * num_register_subtiles + register_subtile_id) * register_subtile_cols;
-            const int warp_row_offset = (register_tile_id / num_register_tiles_per_row) * kittens::TILE_ROW_DIM<T>;
-
-            int col_offset = warp_col_offset + (laneid / kittens::TILE_ROW_DIM<T>) * elem_per_thread;
-            int row_offset = warp_row_offset + (laneid % kittens::TILE_ROW_DIM<T>);
-
-            const int offset_in_global = (row_offset * row_stride + col_offset) * sizeof(T);
-
-            const T* lds_elem_ptr = lds_base + (i * N_THREADS * elem_per_thread);
-            uintptr_t lds_addr = reinterpret_cast<uintptr_t>(lds_elem_ptr);
-            as3_uint32_ptr lds_ptr = (as3_uint32_ptr)(lds_addr);
+        {
+            constexpr int i = 0;
+            int col_offset = (((((warp_id + i * num_warps) / num_register_subtiles) % num_register_tiles_per_row) * num_register_subtiles + ((warp_id + i * num_warps) % num_register_subtiles)) * register_subtile_cols) + (laneid / kittens::TILE_ROW_DIM<T>) * elem_per_thread;
+            int row_offset = ((((warp_id + i * num_warps) / num_register_subtiles) / num_register_tiles_per_row) * kittens::TILE_ROW_DIM<T>) + (laneid % kittens::TILE_ROW_DIM<T>);
+            as3_uint32_ptr lds_ptr = (as3_uint32_ptr)(reinterpret_cast<uintptr_t>((lds_base + (i * N_THREADS * elem_per_thread))));
 
             llvm_amdgcn_raw_buffer_load_lds(
                 srsrc, // buffer resource
                 lds_ptr,
                 16, // 16 bytes
-                offset_in_global,
+                (row_offset * row_stride + col_offset) * sizeof(T),
+                0, 
+                0, // instruction offset
+                static_cast<index_t>(coherency::cache_all)); // cache coherency
+        }
+
+        #pragma unroll
+        for (int i = 1; i < memcpy_per_tile; i++) {
+            int col_offset = (((((warp_id + i * num_warps) / num_register_subtiles) % num_register_tiles_per_row) * num_register_subtiles + ((warp_id + i * num_warps) % num_register_subtiles)) * register_subtile_cols) + (laneid / kittens::TILE_ROW_DIM<T>) * elem_per_thread;
+            int row_offset = ((((warp_id + i * num_warps) / num_register_subtiles) / num_register_tiles_per_row) * kittens::TILE_ROW_DIM<T>) + (laneid % kittens::TILE_ROW_DIM<T>);
+            as3_uint32_ptr lds_ptr = (as3_uint32_ptr)(reinterpret_cast<uintptr_t>((lds_base + (i * N_THREADS * elem_per_thread))));
+
+            llvm_amdgcn_raw_buffer_load_lds(
+                srsrc, // buffer resource
+                lds_ptr,
+                16, // 16 bytes
+                (row_offset * row_stride + col_offset) * sizeof(T),
                 0, 
                 0, // instruction offset
                 static_cast<index_t>(coherency::cache_all)); // cache coherency
