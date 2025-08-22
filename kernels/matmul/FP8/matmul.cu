@@ -474,17 +474,17 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
             using T = fp8e4m3;
             using ST = ST_A;
             using GL = GL_A;
-            const ST& dst = As[curr];
-            const GL& src = A;
+            const ST& dst_gl_to_st = As[curr];
+            const GL& src_gl_to_st = A;
             const coord<ST>& idx = {0, 0, block_row, k + 2};
             constexpr int N_THREADS = NUM_WARPS*WARP_THREADS;
 
-            const int row_stride = src.template stride<2>();
+            const int row_stride = src_gl_to_st.template stride<2>();
             coord<> unit_coord = idx.template unit_coord<2, 3>();
-            T* global_ptr = (T*)&src[unit_coord];
+            T* global_ptr = (T*)&src_gl_to_st[unit_coord];
             i32x4 srsrc = make_srsrc(global_ptr, row_stride * ST::rows * sizeof(T));
             constexpr int elem_per_warp = (16 / sizeof(fp8e4m3)) * kittens::WARP_THREADS; // 1024
-            const T* lds_base = &dst.data[0] + (warpid() * elem_per_warp);
+            const T* lds_base = &dst_gl_to_st.data[0] + (warpid() * elem_per_warp);
 
             buffer_load_lds<T, ST, N_THREADS>(0, lds_base, srsrc, row_stride);
 
@@ -503,79 +503,41 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
             buffer_load_lds<T, ST, N_THREADS>(7, lds_base, srsrc, row_stride);
         }
 
-        {
-            // load<2, false, kittens::ducks::rt_layout::row, ST_B, kittens::gl<fp8e4m3, 1, 1, N, K>, coord<ST_B>, NUM_WARPS*WARP_THREADS>(Bs[curr], B, {0, 0, block_col, k + 2});
-            // __device__ inline void load(ST& dst, const GL& src, const COORD& idx)
-            using T = fp8e4m3;
-            using ST = ST_B;
-            using GL = GL_B;
-            const ST& dst = Bs[curr];
-            const GL& src = B;
-            const coord<ST>& idx = {0, 0, block_col, k + 2};
-            constexpr int N_THREADS = NUM_WARPS*WARP_THREADS;
-
-            const int row_stride = src.template stride<2>();
-            coord<> unit_coord = idx.template unit_coord<2, 3>();
-            T* global_ptr = (T*)&src[unit_coord];
-            i32x4 srsrc = make_srsrc(global_ptr, row_stride * ST::rows * sizeof(T));
-            constexpr int elem_per_warp = (16 / sizeof(fp8e4m3)) * kittens::WARP_THREADS; // 1024
-            const T* lds_base = &dst.data[0] + (warpid() * elem_per_warp);
-
-            buffer_load_lds<T, ST, N_THREADS>(0, lds_base, srsrc, row_stride);
-
-            buffer_load_lds<T, ST, N_THREADS>(1, lds_base, srsrc, row_stride);
-
-            buffer_load_lds<T, ST, N_THREADS>(2, lds_base, srsrc, row_stride);
-
-            buffer_load_lds<T, ST, N_THREADS>(3, lds_base, srsrc, row_stride);
-
-            buffer_load_lds<T, ST, N_THREADS>(4, lds_base, srsrc, row_stride);
-
-            buffer_load_lds<T, ST, N_THREADS>(5, lds_base, srsrc, row_stride);
-
-            buffer_load_lds<T, ST, N_THREADS>(6, lds_base, srsrc, row_stride);
-
-            buffer_load_lds<T, ST, N_THREADS>(7, lds_base, srsrc, row_stride);
-        }
-
-        // end global to shared
         {
             // auto as_subtile_temp = kittens::subtile_inplace<BLOCK_SIZE_ROW / WARPS_ROW, k_step>(As[next], {warp_m, 0});
             // load(a_temp, as_subtile_temp);
             using RT = RT_A;
-            RT& dst = a_temp;
+            RT& dst_st_to_rt = a_temp;
             auto as_subtile_temp = kittens::subtile_inplace<BLOCK_SIZE_ROW / WARPS_ROW, k_step>(As[next], {warp_m, 0});
-            using ST = typeof(as_subtile_temp);
-            const ST& src = as_subtile_temp;
+            using ST_SUB = typeof(as_subtile_temp);
+            const ST_SUB& src_st_to_rt = as_subtile_temp;
 
-            using U  = ST::dtype;
-            uint32_t addr = reinterpret_cast<uintptr_t>(&src.data[laneid() * (16 / sizeof(U))]);
+            using U  = ST_SUB::dtype;
+            uint32_t addr_st_to_rt = reinterpret_cast<uintptr_t>(&src_st_to_rt.data[laneid() * (16 / sizeof(U))]);
 
-            ds_read_128_bits<RT, ST, U>(dst, addr, 0, 0, 0);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 0, 0, 1);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 0, 1, 0);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 0, 1, 1);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 0, 1);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 1, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 1, 1);
 
-            ds_read_128_bits<RT, ST, U>(dst, addr, 1, 0, 0);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 1, 0, 1);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 1, 1, 0);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 1, 1, 1);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 0, 1);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 1, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 1, 1);
 
-            ds_read_128_bits<RT, ST, U>(dst, addr, 2, 0, 0);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 2, 0, 1);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 2, 1, 0);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 2, 1, 1);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 0, 1);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 1, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 1, 1);
 
-            ds_read_128_bits<RT, ST, U>(dst, addr, 3, 0, 0);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 3, 0, 1);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 3, 1, 0);
-            ds_read_128_bits<RT, ST, U>(dst, addr, 3, 1, 1);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 0, 1);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 1, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 1, 1);
         }
 
-
-        // this is doing the kth mma
-        // mma_ABt(c, a, b, c);
         {
+            // this is doing the kth mma
             // mma_ABt(c, a, b, c);
             using D = RT_C;
             D& d_mma = c;
@@ -599,6 +561,52 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 1, 2, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 1, 3, 0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 1, 3, 1);
+        }
+
+        {
+            // load<2, false, kittens::ducks::rt_layout::row, ST_B, kittens::gl<fp8e4m3, 1, 1, N, K>, coord<ST_B>, NUM_WARPS*WARP_THREADS>(Bs[curr], B, {0, 0, block_col, k + 2});
+            // __device__ inline void load(ST& dst, const GL& src, const COORD& idx)
+            using T = fp8e4m3;
+            using ST = ST_B;
+            using GL = GL_B;
+            const ST& dst_gl_to_st = Bs[curr];
+            const GL& src_gl_to_st = B;
+            const coord<ST>& idx = {0, 0, block_col, k + 2};
+            constexpr int N_THREADS = NUM_WARPS*WARP_THREADS;
+
+            const int row_stride = src_gl_to_st.template stride<2>();
+            coord<> unit_coord = idx.template unit_coord<2, 3>();
+            T* global_ptr = (T*)&src_gl_to_st[unit_coord];
+            i32x4 srsrc = make_srsrc(global_ptr, row_stride * ST::rows * sizeof(T));
+            constexpr int elem_per_warp = (16 / sizeof(fp8e4m3)) * kittens::WARP_THREADS; // 1024
+            const T* lds_base = &dst_gl_to_st.data[0] + (warpid() * elem_per_warp);
+
+            buffer_load_lds<T, ST, N_THREADS>(0, lds_base, srsrc, row_stride);
+
+            buffer_load_lds<T, ST, N_THREADS>(1, lds_base, srsrc, row_stride);
+
+            buffer_load_lds<T, ST, N_THREADS>(2, lds_base, srsrc, row_stride);
+
+            buffer_load_lds<T, ST, N_THREADS>(3, lds_base, srsrc, row_stride);
+
+            buffer_load_lds<T, ST, N_THREADS>(4, lds_base, srsrc, row_stride);
+
+            buffer_load_lds<T, ST, N_THREADS>(5, lds_base, srsrc, row_stride);
+
+            buffer_load_lds<T, ST, N_THREADS>(6, lds_base, srsrc, row_stride);
+
+            buffer_load_lds<T, ST, N_THREADS>(7, lds_base, srsrc, row_stride);
+        }
+
+        {
+            // this is doing the kth mma
+            // mma_ABt(c, a, b, c);
+            using D = RT_C;
+            D& d_mma = c;
+            const RT_A& a_mma = a;
+            const RT_B& b_mma = b;
+            const RT_C& c_mma = c;
+
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 0, 0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 2, 0, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 1, 0);
