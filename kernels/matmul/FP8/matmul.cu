@@ -15,7 +15,7 @@ struct TimingResult {
 
 // #define DUMP_TO_CSV
 
-#define PROFILE
+// #define PROFILE
 
 #define HipCheckError()    __hipCheckError( __FILE__, __LINE__ )
 inline void __hipCheckError( const char *file, const int line ) {
@@ -314,13 +314,19 @@ __device__ inline void buffer_load_lds(int i, const T* lds_base, i32x4 srsrc, in
 
     constexpr int num_warps = N_THREADS / WARP_THREADS;
     constexpr int elem_per_thread = 16 / sizeof(fp8e4m3);
-    constexpr int elem_per_warp = elem_per_thread * kittens::WARP_THREADS;
-    constexpr int num_register_subtiles = kittens::TILE_ROW_DIM<T> * kittens::TILE_COL_DIM<T> / elem_per_warp;
-    constexpr int num_register_tiles_per_row = ST::cols / kittens::TILE_COL_DIM<T>;
-    constexpr int register_subtile_cols = kittens::TILE_COL_DIM<T> / num_register_subtiles;
-    constexpr int num_register_subtiles_per_row = num_register_tiles_per_row * num_register_subtiles;
-    int col_offset = (((((warpid() + i * num_warps) / num_register_subtiles) % num_register_tiles_per_row) * num_register_subtiles + ((warpid() + i * num_warps) % num_register_subtiles)) * register_subtile_cols) + (laneid() / kittens::TILE_ROW_DIM<T>) * elem_per_thread;
-    int row_offset = ((((warpid() + i * num_warps) / num_register_subtiles) / num_register_tiles_per_row) * kittens::TILE_ROW_DIM<T>) + (laneid() % kittens::TILE_ROW_DIM<T>);
+    constexpr int elem_per_warp = elem_per_thread * kittens::WARP_THREADS; // 1024
+    constexpr int num_register_subtiles = kittens::TILE_ROW_DIM<T> * kittens::TILE_COL_DIM<T> / elem_per_warp; // 2
+    constexpr int num_register_tiles_per_row = ST::cols / kittens::TILE_COL_DIM<T>; // 2
+
+    const int register_tile_id = (warpid() + i * num_warps) / num_register_subtiles; // 0 - 15
+    const int register_subtile_id = (warpid() + i * num_warps) % num_register_subtiles; // 0 - 1
+    const int register_subtile_cols = kittens::TILE_COL_DIM<T> / num_register_subtiles; // 32
+    const int num_register_subtiles_per_row = num_register_tiles_per_row * num_register_subtiles; // 4
+    const int warp_col_offset = ((register_tile_id % num_register_tiles_per_row) * num_register_subtiles + register_subtile_id) * register_subtile_cols; // 0 - 127
+    const int warp_row_offset = (register_tile_id / num_register_tiles_per_row) * kittens::TILE_ROW_DIM<T>; // 0 - 255
+
+    int col_offset = warp_col_offset + (kittens::laneid() / kittens::TILE_ROW_DIM<T>) * elem_per_thread;
+    int row_offset = warp_row_offset + (kittens::laneid() % kittens::TILE_ROW_DIM<T>);
     as3_uint32_ptr lds_ptr = (as3_uint32_ptr)(reinterpret_cast<uintptr_t>((lds_base + (i * N_THREADS * elem_per_thread))));
 
     llvm_amdgcn_raw_buffer_load_lds(
@@ -518,91 +524,88 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
             /***** END MMA VARS *****/
 
             buffer_load_lds<T, ST, N_THREADS>(0, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 0, 1);
+            __builtin_amdgcn_sched_barrier(0);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 1, 0, 0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 0, 0, 0);
 
             __builtin_amdgcn_sched_barrier(0);
 
             buffer_load_lds<T, ST, N_THREADS>(1, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 1, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 1, 1);
+            __builtin_amdgcn_sched_barrier(0);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 1, 0, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 0, 0, 1);
 
             __builtin_amdgcn_sched_barrier(0);
 
             buffer_load_lds<T, ST, N_THREADS>(2, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 0, 1);
+            __builtin_amdgcn_sched_barrier(0);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 1, 1, 0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 0, 1, 0);
 
             __builtin_amdgcn_sched_barrier(0);
 
             buffer_load_lds<T, ST, N_THREADS>(3, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 0, 1, 1);
 
             __builtin_amdgcn_sched_barrier(0);
 
             buffer_load_lds<T, ST, N_THREADS>(4, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 0, 2, 0);
 
             __builtin_amdgcn_sched_barrier(0);
 
             buffer_load_lds<T, ST, N_THREADS>(5, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 0, 2, 1);
 
             __builtin_amdgcn_sched_barrier(0);
 
             buffer_load_lds<T, ST, N_THREADS>(6, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 0, 3, 0);
 
             __builtin_amdgcn_sched_barrier(0);
 
             buffer_load_lds<T, ST, N_THREADS>(7, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 0, 3, 1);
-
-            __builtin_amdgcn_sched_barrier(0);
-
-            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 0, 0);
-            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 0, 1);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 1, 0, 0);
-
-            __builtin_amdgcn_sched_barrier(0);
-
-            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 1, 0);
-            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 1, 1);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 1, 0, 1);
-
-            __builtin_amdgcn_sched_barrier(0);
-
-            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 0, 0);
-            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 0, 1);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 1, 1, 0);
 
             __builtin_amdgcn_sched_barrier(0);
 
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 1, 0);
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 1, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 1, 1, 1);
-
             __builtin_amdgcn_sched_barrier(0);
 
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 0, 0);
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 0, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 1, 2, 0);
-
             __builtin_amdgcn_sched_barrier(0);
 
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 1, 0);
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 1, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 1, 2, 1);
-
             __builtin_amdgcn_sched_barrier(0);
 
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 0, 0);
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 0, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 1, 3, 0);
-
             __builtin_amdgcn_sched_barrier(0);
 
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 1, 0);
             ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 1, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 1, 3, 1);
-
             __builtin_amdgcn_sched_barrier(0);
         }
 
@@ -610,6 +613,8 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
         __builtin_amdgcn_sched_barrier(0);
 
         {
+            /***** START GLOBAL TO SHARED VARS *****/
+
             // load<2, false, kittens::ducks::rt_layout::row, ST_B, kittens::gl<fp8e4m3, 1, 1, N, K>, coord<ST_B>, NUM_WARPS*WARP_THREADS>(Bs[curr], B, {0, 0, block_col, k + 2});
             // __device__ inline void load(ST& dst, const GL& src, const COORD& idx)
             using T = fp8e4m3;
@@ -627,27 +632,25 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
             constexpr int elem_per_warp = (16 / sizeof(fp8e4m3)) * kittens::WARP_THREADS; // 1024
             const T* lds_base = &dst_gl_to_st.data[0] + (warpid() * elem_per_warp);
 
-            buffer_load_lds<T, ST, N_THREADS>(0, lds_base, srsrc, row_stride);
+            /***** END GLOBAL TO SHARED VARS *****/
 
-            buffer_load_lds<T, ST, N_THREADS>(1, lds_base, srsrc, row_stride);
+            /***** START SHARED TO REGISTER VARS *****/
 
-            buffer_load_lds<T, ST, N_THREADS>(2, lds_base, srsrc, row_stride);
+            // auto bs_subtile_temp = kittens::subtile_inplace<BLOCK_SIZE_COL / WARPS_COL, k_step>(Bs[next], {warp_n, 0});
+            // load(b_temp, bs_subtile_temp);
+            using RT = RT_B;
+            RT& dst_st_to_rt = b_temp;
+            auto bs_subtile_temp = kittens::subtile_inplace<BLOCK_SIZE_COL / WARPS_COL, k_step>(Bs[next], {warp_n, 0});
+            using ST_SUB = typeof(bs_subtile_temp);
+            const ST_SUB& src_st_to_rt = bs_subtile_temp;
 
-            buffer_load_lds<T, ST, N_THREADS>(3, lds_base, srsrc, row_stride);
+            using U  = ST_SUB::dtype;
+            uint32_t addr_st_to_rt = reinterpret_cast<uintptr_t>(&src_st_to_rt.data[laneid() * (16 / sizeof(U))]);
 
-            buffer_load_lds<T, ST, N_THREADS>(4, lds_base, srsrc, row_stride);
+            /***** END SHARED TO REGISTER VARS *****/
 
-            buffer_load_lds<T, ST, N_THREADS>(5, lds_base, srsrc, row_stride);
+            /***** START MMA VARS *****/
 
-            buffer_load_lds<T, ST, N_THREADS>(6, lds_base, srsrc, row_stride);
-
-            buffer_load_lds<T, ST, N_THREADS>(7, lds_base, srsrc, row_stride);
-        }
-
-
-        __builtin_amdgcn_sched_barrier(0);
-
-        {
             // this is doing the kth mma
             // mma_ABt(c, a, b, c);
             using D = RT_C;
@@ -656,30 +659,90 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
             const RT_B& b_mma = b;
             const RT_C& c_mma = c;
 
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 0, 0);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 2, 0, 1);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 1, 0);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 2, 1, 1);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 2, 0);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 2, 2, 1);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 3, 0);
-            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 2, 3, 1);
+            /***** END MMA VARS *****/
+
+            buffer_load_lds<T, ST, N_THREADS>(0, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 0, 1);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 3, 0, 0);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 0, 0);
+
+            __builtin_amdgcn_sched_barrier(0);
+
+            buffer_load_lds<T, ST, N_THREADS>(1, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 1, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 0, 1, 1);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 3, 0, 1);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 2, 0, 1);
+
+            __builtin_amdgcn_sched_barrier(0);
+
+            buffer_load_lds<T, ST, N_THREADS>(2, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 0, 1);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 3, 1, 0);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 1, 0);
+
+            __builtin_amdgcn_sched_barrier(0);
+
+            buffer_load_lds<T, ST, N_THREADS>(3, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 1, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 1, 1, 1);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 3, 1, 1);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 2, 1, 1);
+
+            __builtin_amdgcn_sched_barrier(0);
+
+            buffer_load_lds<T, ST, N_THREADS>(4, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 0, 1);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 3, 2, 0);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 2, 0);
+
+            __builtin_amdgcn_sched_barrier(0);
+
+            buffer_load_lds<T, ST, N_THREADS>(5, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 1, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 2, 1, 1);
+            __builtin_amdgcn_sched_barrier(0);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 3, 2, 1);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 2, 2, 1);
+
+            __builtin_amdgcn_sched_barrier(0);
+
+            buffer_load_lds<T, ST, N_THREADS>(6, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 2, 3, 0);
+
+            __builtin_amdgcn_sched_barrier(0);
+
+            buffer_load_lds<T, ST, N_THREADS>(7, lds_base, srsrc, row_stride);
+            __builtin_amdgcn_sched_barrier(0);
+            mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 2, 3, 1);
+
+            __builtin_amdgcn_sched_barrier(0);
+
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 0, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 0, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, c_mma, 3, 3, 0);
+            __builtin_amdgcn_sched_barrier(0);
+
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 1, 0);
+            ds_read_128_bits<RT, ST_SUB, U>(dst_st_to_rt, addr_st_to_rt, 3, 1, 1);
             mma_ABt_base_wrapper(d_mma, a_mma, b_mma, d_mma, 3, 3, 1);
+            __builtin_amdgcn_sched_barrier(0);
         }
-
-
-        __builtin_amdgcn_sched_barrier(0);
-
-
-        auto bs_subtile_temp = kittens::subtile_inplace<BLOCK_SIZE_COL / WARPS_COL, k_step>(Bs[next], {warp_n, 0});
-        load(b_temp, bs_subtile_temp);
 
         curr ^= 1; next ^= 1;
 
