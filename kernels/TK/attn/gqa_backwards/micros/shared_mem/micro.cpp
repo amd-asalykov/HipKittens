@@ -10,9 +10,10 @@ constexpr int d = 32;
 #define NUM_WARPS 1
 #define NUM_THREADS (kittens::WARP_THREADS * NUM_WARPS)
 
+using G = kittens::group<NUM_WARPS>;
+
 struct micro_globals {
     gl<bf16, -1, -1, -1, -1> in;
-    gl<bf16, -1, -1, -1, -1> in_vec;
     gl<bf16, -1, -1, -1, -1> out;
     dim3 grid()  { return dim3(1); } 
     dim3 block() { return dim3(NUM_THREADS); } 
@@ -31,13 +32,13 @@ void micro_tk(const micro_globals g) {
     constexpr int bytes_per_memcpy = bytes_per_thread * NUM_THREADS;
     constexpr int memcpy_per_tile = n * d * sizeof(T) / bytes_per_memcpy;
     uint32_t swizzled_offsets[memcpy_per_tile];
-    prefill_swizzled_offsets<1, false>(tile_smem, g.in, swizzled_offsets);
+    G::prefill_swizzled_offsets<2, false>(tile_smem, g.in, swizzled_offsets);
     __builtin_amdgcn_s_waitcnt(0);
     __builtin_amdgcn_s_barrier();
     __syncthreads();
 
     // load to smem
-    load<1, false>(tile_smem, g.in, {0, 0, 0, 0}, swizzled_offsets);
+    G::load<2, false>(tile_smem, g.in, {0, 0, 0, 0}, swizzled_offsets);
     __builtin_amdgcn_s_waitcnt(0);
     __builtin_amdgcn_s_barrier();
     __syncthreads();
@@ -65,6 +66,6 @@ void dispatch_micro(micro_globals g) {
 
 PYBIND11_MODULE(tk_kernel, m) {
     m.doc() = "tk_kernel python module";
-    py::bind_function<dispatch_micro>(m, "dispatch_micro", &micro_globals::in, &micro_globals::in_vec, &micro_globals::out);
+    py::bind_function<dispatch_micro>(m, "dispatch_micro", &micro_globals::in, &micro_globals::out);
 }
 

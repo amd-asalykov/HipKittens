@@ -20,18 +20,16 @@ d = 32
 
 # pytorch
 x = torch.randn((b, h, n, d), dtype=torch.bfloat16, device='cuda')
-vec = torch.randn((b, h, n, 1), dtype=torch.bfloat16, device='cuda')
 y = x
 
 # tk
 y_tk = torch.zeros_like(y)
-tk_kernel.dispatch_micro(x, vec, y_tk)
+tk_kernel.dispatch_micro(x, y_tk)
 
 # check
 diff = (y - y_tk).abs().max()
-print(y.shape, vec.shape, x.shape)
+print(y.shape, x.shape)
 print(f"diff: {diff}")
-
 
 print(y[0, 0, 0:2, :8])
 print(y_tk[0, 0, 0:2, :8])
