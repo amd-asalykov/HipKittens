@@ -24,8 +24,8 @@ namespace kittens {
  * @param src[in] Reference to the source register base tile to be swapped.
  */
  #ifdef KITTENS_CDNA4
-template<ducks::rt_layout::all layout1, typename T, ducks::rt_layout::all layout2>
-__device__ inline void swap_layout(rt_base<T, layout1> &dst, const rt_base<T, layout2> &src) {
+template<ducks::rt_layout::all layout1, typename T, ducks::rt_layout::all layout2, ducks::rt_layout::all matrix_layout>
+__device__ inline void swap_layout(rt_base<T, layout1, matrix_layout> &dst, const rt_base<T, layout2, matrix_layout> &src) {
 
     // same layout
     if constexpr (std::is_same_v<layout1, layout2>) { // just a simple copy
@@ -268,9 +268,9 @@ __device__ static inline void swap_layout(rt<T2, _height, _width, typename ducks
  * @return A reference to the swapped register base tile.
  */
 #ifdef KITTENS_CDNA4
-template<ducks::rt_layout::all layout1, typename T2, ducks::rt_layout::all layout2>
-__device__ inline rt_base<T2, layout1>& swap_layout_inplace(const rt_base<T2, layout2> &src) {
-    rt_base<T2, layout1> &dst = *(rt_base<T2, layout1>*)(&src);
+template<ducks::rt_layout::all layout1, typename T2, ducks::rt_layout::all layout2, ducks::rt_layout::all matrix_layout>
+__device__ inline rt_base<T2, layout1, matrix_layout>& swap_layout_inplace(const rt_base<T2, layout2, matrix_layout> &src) {
+    rt_base<T2, layout1, matrix_layout> &dst = *(rt_base<T2, layout1, matrix_layout>*)(&src);
     swap_layout(dst, src);
     return dst;
 }
@@ -333,10 +333,10 @@ __device__ static inline rt<T2, _rows, _cols, typename ducks::rt_layout::transpo
  * @param src[in] Reference to the register base tile to be transposed.
  */
 #ifdef KITTENS_CDNA4
-template<typename T, ducks::rt_layout::all layout>
-__device__ inline void transpose(rt_base<T, layout> &dst, const rt_base<T, layout> &src) {
+template<typename T, ducks::rt_layout::all layout, ducks::rt_layout::all matrix_layout>
+__device__ inline void transpose(rt_base<T, layout, matrix_layout> &dst, const rt_base<T, layout, matrix_layout> &src) {
     int lane = laneid();
-
+    
     if constexpr (std::is_same_v<layout, ducks::rt_layout::col> || std::is_same_v<layout, ducks::rt_layout::row>) {
         int to_flip = ((lane % 32) / 16) * 8;
         int or_not_to_flip = ((lane % 32) / 16) * 16;
@@ -450,8 +450,13 @@ __device__ static inline void transpose_sep(RT &dst, const rt<typename RT::T, RT
  * @param src[in] Reference to the register tile to be transposed.
  * @return A reference to the transposed register base tile.
  */
+#ifdef KITTENS_CDNA4
+template<typename T2, ducks::rt_layout::all layout, ducks::rt_layout::all matrix_layout>
+__device__ inline rt_base<T2, layout, matrix_layout>& transpose_inplace(rt_base<T2, layout, matrix_layout> &src) {
+#else
 template<typename T2, ducks::rt_layout::all layout>
 __device__ inline rt_base<T2, layout>& transpose_inplace(rt_base<T2, layout> &src) {
+#endif
     transpose(src, src);
     return src;
 }
@@ -472,7 +477,12 @@ __device__ static inline rt<T2, _rows, _cols, layout>& transpose_inplace(rt<T2, 
     for(int i = 0; i < tile.height; i++) {
         #pragma unroll
         for(int j = 0; j < i; j++) {
+            #ifdef KITTENS_CDNA4
+            using matrix_layout = typename rt<T2, _rows, _cols, layout>::matrix_layout;
+            rt_base<T2, layout, matrix_layout> tmp;
+            #else
             rt_base<T2, layout> tmp;
+            #endif
             copy(tmp, tile.tiles[i][j]);
             transpose(tile.tiles[i][j], tile.tiles[j][i]);
             transpose(tile.tiles[j][i], tmp);
@@ -509,8 +519,13 @@ __device__ static inline void swap_layout_and_transpose(rt<T2, _cols, _rows, typ
  * @param[out] dst A reference to the destination register base tile.
  * @param[in] src A reference to the source register base tile.
  */
+#ifdef KITTENS_CDNA4
+template<typename T, typename U, ducks::rt_layout::all layout, ducks::rt_layout::all matrix_layout>
+__device__ static inline void copy(rt_base<T, layout, matrix_layout> &dst, const rt_base<U, layout, matrix_layout> &src) {
+#else
 template<typename T, typename U, ducks::rt_layout::all layout>
 __device__ static inline void copy(rt_base<T, layout> &dst, const rt_base<U, layout> &src) {
+#endif
     using T2 = typename base_types::packing<T>::packed_type;
     using U2 = typename base_types::packing<U>::packed_type;
     #pragma unroll

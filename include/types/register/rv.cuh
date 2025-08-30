@@ -36,7 +36,7 @@ struct identifier {};
  * @brief Register vector structure.
  *
  * @tparam _T The packed data type used for the vector elements.
- * @tparam _outer_dim The size of the tile, in units of TILE_DIM (16).
+ * @tparam _outer_dim The size of the tile, in units of TILE_DIM.
  * @tparam _inner_dim This controls the layout of the tile in terms of which axis it maps on the register tile layout.
  *
  * Register vectors are used to accumulate and map values across tiles. You can do computation
@@ -45,11 +45,12 @@ struct identifier {};
  * the register layouts used by the tensor cores. ThunderKittens wants you working with tiles
  * where possible!
  */
-template<typename _T, size_t _length, ducks::rv_layout::all _layout=ducks::rv_layout::naive>
+template<typename _T, size_t _length, ducks::rv_layout::all _layout=ducks::rv_layout::naive, ducks::rt_matrix::all _matrix_layout=ducks::rt_matrix::mfma_32x32x16>
 struct rv {
     using identifier = ducks::rv::identifier; ///< Type identifier for the rv structure.
     static_assert(kittens::ducks::base_types::T1<_T>); // confirm it's a supported type
     using layout = _layout;
+    using matrix_layout = _matrix_layout;
     static constexpr bool is_naive = std::is_same_v<layout, ducks::rv_layout::naive>;
     static constexpr bool is_ortho = std::is_same_v<layout, ducks::rv_layout::ortho>;
     using T = kittens::base_types::packing<_T>::unpacked_type;
@@ -57,8 +58,15 @@ struct rv {
     using dtype = std::conditional_t<is_naive || is_ortho, T, T2>; ///< Data type of the matrix elements
 
     static constexpr int length = _length; ///< Length in elements.
-    static_assert(length % kittens::TILE_ROW_DIM<T> == 0, "Length must be divisible by the tile dimension");
-    static constexpr int tiles  = _length / kittens::TILE_ROW_DIM<T>; ///< Length in subtiles, aliased for consistency with sv type
+
+    static constexpr int tile_size_row = (
+        std::is_same_v<layout, ducks::rv_layout::align> ? matrix_layout::tile_size_col_in : 
+        std::is_same_v<layout, ducks::rv_layout::ortho> ? matrix_layout::tile_size_row_in : 
+        matrix_layout::tile_size_row_in
+    );
+    static_assert(length % tile_size_row == 0, "Length must be divisible by the tile dimension");
+
+    static constexpr int tiles  = _length / tile_size_row; ///< Length in subtiles, aliased for consistency with sv type
     static constexpr int inner_dim = layout::inner_dim; ///< Internal layout within a subtile. Either 1 or 2.
     #ifdef KITTENS_CDNA4
     static constexpr int outer_dim = is_naive ? (tiles+1)/2 : tiles;

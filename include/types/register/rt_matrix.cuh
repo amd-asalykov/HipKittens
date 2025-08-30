@@ -13,27 +13,28 @@
   * @namespace rt_matrix
   * 
   * @brief A namespace for template metaprogramming with register tile layouts.
+  * Assumption below is that the col is the reduction dimension
   */
  namespace rt_matrix {
  
  /**
-  * @brief A dummy type used to identify a row-major layout for a register tile.
+  * @brief Base tile dimensions for the mfma_32x32x16 matrix layout.
   */
  struct mfma_32x32x16 {
-    static constexpr int tile_size_row_in = 32; // Assumption: row is the non-reduction dimension
-    static constexpr int tile_size_col_in = 16; // Assumption: col is the reduction dimension
+    static constexpr int tile_size_row_in = 32; 
+    static constexpr int tile_size_col_in = 16; 
     static constexpr int tile_size_row_out = 32;
     static constexpr int tile_size_col_out = 32;
- }; // for most matrices
+ }; 
  /**
-  * @brief A dummy type used to identify a col-major layout for a register tile.
+  * @brief Base tile dimensions for the mfma_16x16x32 matrix layout.
   */
  struct mfma_16x16x32 {
     static constexpr int tile_size_row_in = 16;
     static constexpr int tile_size_col_in = 32;
     static constexpr int tile_size_row_out = 16;
     static constexpr int tile_size_col_out = 16;
- }; // for the B-matrix of MMA ops.
+ }; 
 
  
  template<typename T>
