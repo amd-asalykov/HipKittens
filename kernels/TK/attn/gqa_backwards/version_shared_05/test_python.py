@@ -263,10 +263,6 @@ for _ in range(num_warmup):
         delta_tk
     )
 
-    tk_kernel.dispatch_dq_shuffle(
-        dQ_tk,
-    )
-
 
 for _ in range(num_iters):
     dQ_tk = torch.zeros_like(q_grad_tiled_bhnd).bfloat16()
@@ -295,10 +291,6 @@ for _ in range(num_iters):
         dV_tk,    
         L_tk,
         delta_tk
-    )
-
-    tk_kernel.dispatch_dq_shuffle(
-        dQ_tk,
     )
 
     end_event.record()
