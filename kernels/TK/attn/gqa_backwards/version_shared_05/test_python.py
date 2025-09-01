@@ -231,16 +231,16 @@ K_tk = K_bhnd.bfloat16().clone().contiguous().detach().requires_grad_(True)
 V_tk = V_bhnd.bfloat16().clone().contiguous().detach().requires_grad_(True)  
 dS_ij_tk = torch.zeros_like(P_tiled).bfloat16().clone()
 O_tk = O_tiled.bfloat16().clone()
-dO_tk = dO_bhnd.float().clone()
+dO_tk = dO_bhnd.bfloat16().clone()
 L_tk = L_tiled.float().unsqueeze(-1)
 
 # TK
 print("Running ThunderKittens ...")
 timings = []
 for _ in range(num_warmup):
-    dQ_tk = torch.zeros_like(q_grad_tiled_bhnd).float()
-    dK_tk = torch.zeros_like(k_grad_tiled_bhnd).float()
-    dV_tk = torch.zeros_like(v_grad_tiled_bhnd).float()
+    dQ_tk = torch.zeros_like(q_grad_tiled_bhnd).bfloat16()
+    dK_tk = torch.zeros_like(k_grad_tiled_bhnd).bfloat16()
+    dV_tk = torch.zeros_like(v_grad_tiled_bhnd).bfloat16()
     delta_tk = torch.zeros_like(delta_tiled).float().transpose(-1, -2).contiguous()
 
     tk_kernel.dispatch_prep(
@@ -263,11 +263,15 @@ for _ in range(num_warmup):
         delta_tk
     )
 
+    tk_kernel.dispatch_dq_shuffle(
+        dQ_tk,
+    )
+
 
 for _ in range(num_iters):
-    dQ_tk = torch.zeros_like(q_grad_tiled_bhnd).float()
-    dK_tk = torch.zeros_like(k_grad_tiled_bhnd).float()
-    dV_tk = torch.zeros_like(v_grad_tiled_bhnd).float()
+    dQ_tk = torch.zeros_like(q_grad_tiled_bhnd).bfloat16()
+    dK_tk = torch.zeros_like(k_grad_tiled_bhnd).bfloat16()
+    dV_tk = torch.zeros_like(v_grad_tiled_bhnd).bfloat16()
     # delta_tk = torch.zeros_like(delta_tiled).float()
     delta_tk = torch.zeros_like(delta_tiled).float().transpose(-1, -2).contiguous()
     torch.cuda.synchronize()
@@ -291,6 +295,10 @@ for _ in range(num_iters):
         dV_tk,    
         L_tk,
         delta_tk
+    )
+
+    tk_kernel.dispatch_dq_shuffle(
+        dQ_tk,
     )
 
     end_event.record()
@@ -337,6 +345,10 @@ print(f"V grad max error: {v_grad_tiled_diff.max().item():.6f}")
 print(f"\nTK vs PyTorch comparison:")
 
 num_print = 8
+print("\nDelta outputs:")
+print("TK: ", delta_tk[0, 0, :num_print, 0], "Max:", delta_tk.max().item())
+print("PyTorch: ", delta_tiled[0, 0, :num_print, 0], "Max:", delta_tiled.max().item())
+
 print("\nGradient K outputs:")
 print("TK: ", dK_tk[0, 0, 0, :num_print], "Max:", dK_tk.max().item())
 print("PyTorch: ", k_grad_pytorch[0, 0, 0, :num_print], "Max:", k_grad_pytorch.max().item())
