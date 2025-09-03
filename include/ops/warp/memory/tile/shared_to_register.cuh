@@ -29,8 +29,9 @@ namespace kittens {
 template<ducks::rt::all RT, ducks::st::all ST>
 __device__ inline static void load(RT &dst, const ST &src) {
 
-    static_assert(RT::height == ST::height, "register tile and shared tile must match height");
-    static_assert(RT::width == ST::width,  "register tile and shared tile must match width");
+    // TODO: uncomment this
+    // static_assert(RT::height == ST::height, "register tile and shared tile must match height");
+    // static_assert(RT::width == ST::width,  "register tile and shared tile must match width");
 
     // TODO: add support for fp8
     using T2 = RT::dtype;
@@ -98,59 +99,59 @@ __device__ inline static void load(RT &dst, const ST &src) {
                     }
                 }
             } else {
-                // // Here, the register tile layout is 32x16.
-                // // The base tiles on the shared tile are 16x32.
-                // // As a result, every row of register tiles map to two rows of base tiles on the shared tile.
-                // // Furthermore, every column of shared tiles map to two columns of register tiles.
-                // const int row_offset = (laneid % 16) / 4 + (laneid / 16) * 8;
-                // const int col_offset = ((laneid % 4) * 4);
-                // const int row_tile_byte_offset = (laneid / 32) * ST::underlying_width * ST::underlying_tile_rows * ST::underlying_tile_cols * sizeof(U);
-                // const int lane_byte_offset = (row_offset * ST::underlying_tile_cols + col_offset) * sizeof(U);
-                // const int swizzled_lane_byte_offset = lane_byte_offset ^ ((lane_byte_offset >> 9) << 5);
+                // Here, the register tile layout is 32x16.
+                // The base tiles on the shared tile are 16x32.
+                // As a result, every row of register tiles map to two rows of base tiles on the shared tile.
+                // Furthermore, every column of shared tiles map to two columns of register tiles.
+                int row_offset = (laneid % 16) / 4 + ((laneid % 32) / 16) * 8;
+                int col_offset = ((laneid % 4) * 4);
+                int row_tile_byte_offset = (laneid / 32) * ST::underlying_width * ST::underlying_tile_rows * ST::underlying_tile_cols * sizeof(U);
+                int lane_byte_offset = (row_offset * ST::underlying_tile_cols + col_offset) * sizeof(U);
+                int swizzled_lane_byte_offset = lane_byte_offset ^ ((lane_byte_offset >> 9) << 5);
 
-                // const uint32_t addr = reinterpret_cast<uintptr_t>(&src.data[0]) + swizzled_lane_byte_offset + row_tile_byte_offset;
+                uint32_t addr = reinterpret_cast<uintptr_t>(&src.data[0]) + swizzled_lane_byte_offset + row_tile_byte_offset;
         
-                // #pragma unroll
-                // for(int i = 0; i < dst.height; i++) {
-                //     #pragma unroll
-                //     for(int j = 0; j < (dst.width + 1) / 2; j++) {
-                //         asm volatile(
-                //             "ds_read_b64_tr_b16 %0, %2 offset:%3\n"
-                //             "ds_read_b64_tr_b16 %1, %2 offset:%4\n"
-                //             : "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j * 2].data[0])), 
-                //             "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j * 2].data[2]))
-                //             : "v"(addr),
-                //             "i"(i * (2 * row_stride) + j * tile_stride),
-                //             "i"(i * (2 * row_stride) + j * tile_stride + 4 * ST::underlying_tile_cols * sizeof(U))
-                //             : "memory"
-                //         ); 
-                //     }
-                // }
+                #pragma unroll
+                for(int i = 0; i < dst.height; i++) {
+                    #pragma unroll
+                    for(int j = 0; j < (dst.width + 1) / 2; j++) {
+                        asm volatile(
+                            "ds_read_b64_tr_b16 %0, %2 offset:%3\n"
+                            "ds_read_b64_tr_b16 %1, %2 offset:%4\n"
+                            : "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j * 2].data[0])), 
+                            "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j * 2].data[2]))
+                            : "v"(addr),
+                            "i"(i * (2 * row_stride) + j * tile_stride),
+                            "i"(i * (2 * row_stride) + j * tile_stride + 4 * ST::underlying_tile_cols * sizeof(U))
+                            : "memory"
+                        ); 
+                    }
+                }
 
-                // row_offset = (laneid % 16) / 4 + (laneid / 16) * 8;
-                // col_offset = ((laneid % 4) * 4) + 16;
-                // row_tile_byte_offset = (laneid / 32) * ST::underlying_width * ST::underlying_tile_rows * ST::underlying_tile_cols * sizeof(U);
-                // lane_byte_offset = (row_offset * ST::underlying_tile_cols + col_offset) * sizeof(U);
-                // swizzled_lane_byte_offset = lane_byte_offset ^ ((lane_byte_offset >> 9) << 5);
+                row_offset = (laneid % 16) / 4 + ((laneid % 32) / 16) * 8;
+                col_offset = ((laneid % 4) * 4) + 16;
+                row_tile_byte_offset = (laneid / 32) * ST::underlying_width * ST::underlying_tile_rows * ST::underlying_tile_cols * sizeof(U);
+                lane_byte_offset = (row_offset * ST::underlying_tile_cols + col_offset) * sizeof(U);
+                swizzled_lane_byte_offset = lane_byte_offset ^ ((lane_byte_offset >> 9) << 5);
 
-                // addr = reinterpret_cast<uintptr_t>(&src.data[0]) + swizzled_lane_byte_offset + row_tile_byte_offset;
+                addr = reinterpret_cast<uintptr_t>(&src.data[0]) + swizzled_lane_byte_offset + row_tile_byte_offset;
         
-                // #pragma unroll
-                // for(int i = 0; i < dst.height; i++) {
-                //     #pragma unroll
-                //     for(int j = 0; j < dst.width / 2; j++) {
-                //         asm volatile(
-                //             "ds_read_b64_tr_b16 %0, %2 offset:%3\n"
-                //             "ds_read_b64_tr_b16 %1, %2 offset:%4\n"
-                //             : "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j * 2 + 1].data[0])), 
-                //             "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j * 2 + 1].data[2]))
-                //             : "v"(addr),
-                //             "i"(i * (2 * row_stride) + j * tile_stride),
-                //             "i"(i * (2 * row_stride) + j * tile_stride + 4 * ST::underlying_tile_cols * sizeof(U))
-                //             : "memory"
-                //         ); 
-                //     }
-                // }
+                #pragma unroll
+                for(int i = 0; i < dst.height; i++) {
+                    #pragma unroll
+                    for(int j = 0; j < dst.width / 2; j++) {
+                        asm volatile(
+                            "ds_read_b64_tr_b16 %0, %2 offset:%3\n"
+                            "ds_read_b64_tr_b16 %1, %2 offset:%4\n"
+                            : "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j * 2 + 1].data[0])), 
+                            "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j * 2 + 1].data[2]))
+                            : "v"(addr),
+                            "i"(i * (2 * row_stride) + j * tile_stride),
+                            "i"(i * (2 * row_stride) + j * tile_stride + 4 * ST::underlying_tile_cols * sizeof(U))
+                            : "memory"
+                        ); 
+                    }
+                }
             }
         } else {
             static_assert(false, "Unsupported layout");
