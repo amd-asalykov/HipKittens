@@ -217,12 +217,17 @@ __device__ inline static void store(const GL &dst, const RV &src, const COORD &i
     else if constexpr (std::is_same_v<typename RV::layout, accum_align_l>) {
         #pragma unroll
         for(auto w = 0; w < (src.outer_dim+3)/4; w++) {
-            int idx = w*2*kittens::WARP_THREADS + 8*((laneid%32)/2) + 4*(laneid/32) + 2*(laneid%2);
-            int o_dim = w*4 + ((laneid%32)/8);
-            int i_dim = (laneid%8);
+            // int idx = w*2*kittens::WARP_THREADS + 8*((laneid%32)/2) + 4*(laneid/32) + 2*(laneid%2);
+            // int o_dim = w*4 + ((laneid%32)/8);
+            // int i_dim = (laneid%8);
+            // // this should be a maximally coalesced store. I hope!
+            // if(idx < src.length)
+            //     *(U2*)&dst_ptr[idx] = base_types::convertor<U2, T2>::convert(src[o_dim][i_dim]);
+            int idx = w*64 + ((laneid%16)/4)*16 + (laneid/16)*4 + (laneid%4);
+            int o_dim = w*4 + ((laneid%16)/4);
             // this should be a maximally coalesced store. I hope!
             if(idx < src.length)
-                *(U2*)&dst_ptr[idx] = base_types::convertor<U2, T2>::convert(src[o_dim][i_dim]);
+                dst_ptr[idx] = base_types::convertor<U, T>::convert(src[o_dim][0]);
         }
     }
     else if constexpr (std::is_same_v<typename RV::layout, ortho_l>) {

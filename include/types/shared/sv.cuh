@@ -49,8 +49,8 @@ struct KITTENS_DEFAULT_ALIGN sv {
     using dtype = T; ///< Data type of the elements in the tile.
 
     static constexpr int length = _length; ///< Length in elements.
-    static_assert(length % TILE_ROW_DIM<T> == 0, "Length must be divisible by the tile dimension");
-    static constexpr int tiles  = length / TILE_ROW_DIM<T>; ///< Length in subtiles.'
+    // static_assert(length % TILE_ROW_DIM<T> == 0, "Length must be divisible by the tile dimension");
+    // static constexpr int tiles  = length / TILE_ROW_DIM<T>; ///< Length in subtiles.'
 
     static constexpr int num_alloc_elements = length;
 
