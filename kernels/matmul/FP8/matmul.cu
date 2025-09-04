@@ -719,20 +719,19 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
         __builtin_amdgcn_s_barrier();
         __builtin_amdgcn_sched_barrier(0);
 
-        auto a_subtile_0 = kittens::subtile_inplace<BLOCK_SIZE_ROW / 2 / WARPS_ROW, k_step>(As[warp_m], {0, 0}, true);
+        auto a_subtile_0 = kittens::subtile_inplace<BLOCK_SIZE_ROW / 2 / WARPS_ROW, k_step>(As[0], {warp_m, 0}, true);
         load_st_to_rt(a[0], a_subtile_0);
-        auto a_subtile_1 = kittens::subtile_inplace<BLOCK_SIZE_ROW / 2 / WARPS_ROW, k_step>(As[warp_m], {1, 0}, true);
+        auto a_subtile_1 = kittens::subtile_inplace<BLOCK_SIZE_ROW / 2 / WARPS_ROW, k_step>(As[1], {warp_m, 0}, true);
         load_st_to_rt(a[1], a_subtile_1);
-        auto b_subtile_0 = kittens::subtile_inplace<BLOCK_SIZE_COL / 2 / WARPS_COL, k_step>(Bs[warp_n], {0, 0}, true);
+        auto b_subtile_0 = kittens::subtile_inplace<BLOCK_SIZE_COL / 2 / WARPS_COL, k_step>(Bs[0], {warp_n, 0}, true);
         load_st_to_rt(b[0], b_subtile_0);
-        auto b_subtile_1 = kittens::subtile_inplace<BLOCK_SIZE_COL / 2 / WARPS_COL, k_step>(Bs[warp_n], {1, 0}, true);
+        auto b_subtile_1 = kittens::subtile_inplace<BLOCK_SIZE_COL / 2 / WARPS_COL, k_step>(Bs[1], {warp_n, 0}, true);
         load_st_to_rt(b[1], b_subtile_1);
 
         __builtin_amdgcn_sched_barrier(0);
         asm volatile("s_waitcnt lgkmcnt(0)");
         __builtin_amdgcn_sched_barrier(0);
 
-        // mma_ABt(c, a, b, c);
         {
             mma_ABt_base(
                 c[0][0].tiles[0][0],
@@ -933,11 +932,10 @@ __global__ __launch_bounds__(256, 1) void matmul_device(const kittens::gl<fp8e4m
         __builtin_amdgcn_sched_barrier(0);
     }
 
-    // Store result: each warp stores its 64x64 result
-    store(C, c[0][0], {0, 0, (block_row * WARPS_ROW + warp_m) * 2, (block_col * WARPS_COL + warp_n) * 2});
-    store(C, c[0][1], {0, 0, (block_row * WARPS_ROW + warp_m) * 2, (block_col * WARPS_COL + warp_n) * 2 + 1});
-    store(C, c[1][0], {0, 0, (block_row * WARPS_ROW + warp_m) * 2 + 1, (block_col * WARPS_COL + warp_n) * 2});
-    store(C, c[1][1], {0, 0, (block_row * WARPS_ROW + warp_m) * 2 + 1, (block_col * WARPS_COL + warp_n) * 2 + 1});
+    store(C, c[0][0], {0, 0, (block_row * WARPS_ROW) * 2 + warp_m, (block_col * WARPS_COL) * 2 + warp_n});
+    store(C, c[0][1], {0, 0, (block_row * WARPS_ROW) * 2 + warp_m, (block_col * WARPS_COL + 1) * 2 + warp_n});
+    store(C, c[1][0], {0, 0, (block_row * WARPS_ROW + 1) * 2 + warp_m, (block_col * WARPS_COL) * 2 + warp_n});
+    store(C, c[1][1], {0, 0, (block_row * WARPS_ROW + 1) * 2 + warp_m, (block_col * WARPS_COL + 1) * 2 + warp_n});
 }
 
 template <int M, int N, int K, int CUs>
