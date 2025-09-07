@@ -229,7 +229,6 @@ v_grad_tiled_bhnd = dV_tiled
 Q_tk = Q_bhnd.bfloat16().clone().contiguous().detach().requires_grad_(True)  
 K_tk = K_bhnd.bfloat16().clone().contiguous().detach().requires_grad_(True)  
 V_tk = V_bhnd.bfloat16().clone().contiguous().detach().requires_grad_(True)  
-dS_ij_tk = torch.zeros_like(P_tiled).bfloat16().clone()
 O_tk = O_tiled.bfloat16().clone()
 dO_tk = dO_bhnd.bfloat16().clone()
 L_tk = L_tiled.float().unsqueeze(-1)
@@ -254,7 +253,6 @@ for _ in range(num_warmup):
         K_tk,     
         V_tk,     
         O_tk,     
-        dS_ij_tk,
         dO_tk,    
         dQ_tk,   
         dK_tk,    
@@ -284,7 +282,6 @@ for _ in range(num_iters):
         K_tk,     
         V_tk,     
         O_tk,     
-        dS_ij_tk,
         dO_tk,    
         dQ_tk,   
         dK_tk,    
@@ -342,18 +339,18 @@ print("TK: ", delta_tk[0, 0, :num_print, 0], "Max:", delta_tk.max().item())
 print("PyTorch: ", delta_tiled[0, 0, :num_print, 0], "Max:", delta_tiled.max().item())
 
 print("\nGradient K outputs:")
-print("TK: ", dK_tk[0, 0, 0, :num_print], "Max:", dK_tk.max().item())
-print("PyTorch: ", k_grad_pytorch[0, 0, 0, :num_print], "Max:", k_grad_pytorch.max().item())
+print("TK: ", dK_tk[0, 0, :num_print, :num_print], "Max:", dK_tk.max().item())
+print("PyTorch: ", k_grad_pytorch[0, 0, :num_print, :num_print], "Max:", k_grad_pytorch.max().item())
 
 print()
 print("Gradient V outputs:")
-print("TK: ", dV_tk[0, 0, 0, :num_print], "Max:", dV_tk.max().item())
-print("PyTorch: ", v_grad_pytorch[0, 0, 0, :num_print], "Max:", v_grad_pytorch.max().item())
+print("TK: ", dV_tk[0, 0, :num_print, :num_print], "Max:", dV_tk.max().item())
+print("PyTorch: ", v_grad_pytorch[0, 0, :num_print, :num_print], "Max:", v_grad_pytorch.max().item())
 
 print()
 print("Gradient Q outputs:")
-print("TK: ", dQ_tk[0, 0, 0, :num_print], "Max:", dQ_tk.max().item())
-print("PyTorch: ", q_grad_pytorch[0, 0, 0, :num_print], "Max:", q_grad_pytorch.max().item())
+print("TK: ", dQ_tk[0, 0, :num_print, :num_print], "Max:", dQ_tk.max().item())
+print("PyTorch: ", q_grad_pytorch[0, 0, :num_print, :num_print], "Max:", q_grad_pytorch.max().item())
 
 # **************************************************
 # TK vs PyTorch (robust tolerances & metrics)
