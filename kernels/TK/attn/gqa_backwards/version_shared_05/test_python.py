@@ -8,6 +8,7 @@ use_aiter = True
 if use_aiter:
     import aiter
 
+torch.cuda.set_device(7)
 torch.manual_seed(0)
 random.seed(0)
 
@@ -156,10 +157,11 @@ if use_aiter:
     q_grad_aiter_bnhd = Q_aiter.grad
     k_grad_aiter_bnhd = K_aiter.grad  
     v_grad_aiter_bnhd = V_aiter.grad
-    out_aiter_bhnd = out_aiter.transpose(1, 2)  # BNHD -> BHND
-    q_grad_aiter_bhnd = q_grad_aiter_bnhd.transpose(1, 2)  # BNHD -> BHND
-    k_grad_aiter_bhnd = k_grad_aiter_bnhd.transpose(1, 2)  # BNHD -> BHND
-    v_grad_aiter_bhnd = v_grad_aiter_bnhd.transpose(1, 2)  # BNHD -> BHND
+    out_aiter_bhnd = out_aiter
+    # out_aiter_bhnd = out_aiter.transpose(1, 2)  # BNHD -> BHND
+    # q_grad_aiter_bhnd = q_grad_aiter_bnhd.transpose(1, 2)  # BNHD -> BHND
+    # k_grad_aiter_bhnd = k_grad_aiter_bnhd.transpose(1, 2)  # BNHD -> BHND
+    # v_grad_aiter_bhnd = v_grad_aiter_bnhd.transpose(1, 2)  # BNHD -> BHND
 
 # **************************************************
 # PyTorch Reference
@@ -197,6 +199,10 @@ print(f"PyTorch reference performance: {eff_pytorch:.2f} TFLOPS for {b=} {h=} {n
 q_grad_pytorch = q_pytorch.grad
 k_grad_pytorch = k_pytorch.grad
 v_grad_pytorch = v_pytorch.grad
+out_pytorch = out_pytorch.transpose(1, 2) # BHND -> BNHD
+q_grad_pytorch = q_grad_pytorch.transpose(1, 2) # BHND -> BNHD
+k_grad_pytorch = k_grad_pytorch.transpose(1, 2) # BHND -> BNHD
+v_grad_pytorch = v_grad_pytorch.transpose(1, 2) # BHND -> BNHD
 
 # **************************************************
 # Tiled Reference
@@ -216,30 +222,31 @@ O_tiled = torch.matmul(P_tiled, V_tiled.float())
 L_tiled = (m_tiled + torch.log(l_tiled)).squeeze(-1)
 
 dQ_tiled, dK_tiled, dV_tiled, delta_tiled = simple_flash_backward(Q_tiled.float(), K_tiled.float(), V_tiled.float(), dO_tiled.float(), L_tiled)
-out_tiled_bhnd = O_tiled
-q_grad_tiled_bhnd = dQ_tiled
-k_grad_tiled_bhnd = dK_tiled
-v_grad_tiled_bhnd = dV_tiled
+out_tiled_bnhd = O_tiled.transpose(1, 2) # BHND -> BNHD
+q_grad_tiled_bnhd = dQ_tiled.transpose(1, 2) # BHND -> BNHD
+k_grad_tiled_bnhd = dK_tiled.transpose(1, 2) # BHND -> BNHD
+v_grad_tiled_bnhd = dV_tiled.transpose(1, 2) # BHND -> BNHD
 
 # **************************************************
 # ThunderKittens
 # **************************************************
 
 # Get forwards pass outputs
-Q_tk = Q_bhnd.bfloat16().clone().contiguous().detach().requires_grad_(True)  
-K_tk = K_bhnd.bfloat16().clone().contiguous().detach().requires_grad_(True)  
-V_tk = V_bhnd.bfloat16().clone().contiguous().detach().requires_grad_(True)  
-O_tk = O_tiled.bfloat16().clone()
-dO_tk = dO_bhnd.bfloat16().clone()
-L_tk = L_tiled.float().unsqueeze(-1)
+Q_tk = Q_bhnd.transpose(1, 2).bfloat16().clone().contiguous().detach().requires_grad_(True)  
+K_tk = K_bhnd.transpose(1, 2).bfloat16().clone().contiguous().detach().requires_grad_(True)  
+V_tk = V_bhnd.transpose(1, 2).bfloat16().clone().contiguous().detach().requires_grad_(True)  
+O_tk = O_tiled.transpose(1, 2).bfloat16().clone().contiguous()
+dO_tk = dO_bhnd.transpose(1, 2).bfloat16().clone().contiguous()
+L_tk = L_tiled.float().unsqueeze(-1).contiguous()
 
 # TK
 print("Running ThunderKittens ...")
 timings = []
 for _ in range(num_warmup):
-    dQ_tk = torch.zeros_like(q_grad_tiled_bhnd).bfloat16()
-    dK_tk = torch.zeros_like(k_grad_tiled_bhnd).bfloat16()
-    dV_tk = torch.zeros_like(v_grad_tiled_bhnd).bfloat16()
+    dQ_tk_in = torch.zeros_like(q_grad_tiled_bnhd).bfloat16().transpose(1, 2).contiguous()
+    dQ_tk = torch.zeros_like(q_grad_tiled_bnhd).bfloat16().contiguous()
+    dK_tk = torch.zeros_like(k_grad_tiled_bnhd).bfloat16().contiguous()
+    dV_tk = torch.zeros_like(v_grad_tiled_bnhd).bfloat16().contiguous()
     delta_tk = torch.zeros_like(delta_tiled).float().transpose(-1, -2).contiguous()
 
     tk_kernel.dispatch_prep(
@@ -254,7 +261,7 @@ for _ in range(num_warmup):
         V_tk,     
         O_tk,     
         dO_tk,    
-        dQ_tk,   
+        dQ_tk_in,   
         dK_tk,    
         dV_tk,    
         L_tk,
@@ -262,14 +269,16 @@ for _ in range(num_warmup):
     )
 
     tk_kernel.dispatch_dq_shuffle(
-        dQ_tk,
+        dQ_tk_in,
+        dQ_tk
     )
 
 
 for _ in range(num_iters):
-    dQ_tk = torch.zeros_like(q_grad_tiled_bhnd).bfloat16()
-    dK_tk = torch.zeros_like(k_grad_tiled_bhnd).bfloat16()
-    dV_tk = torch.zeros_like(v_grad_tiled_bhnd).bfloat16()
+    dQ_tk_in = torch.zeros_like(q_grad_tiled_bnhd).bfloat16().transpose(1, 2).contiguous()
+    dQ_tk = torch.zeros_like(q_grad_tiled_bnhd).bfloat16().contiguous()
+    dK_tk = torch.zeros_like(k_grad_tiled_bnhd).bfloat16().contiguous()
+    dV_tk = torch.zeros_like(v_grad_tiled_bnhd).bfloat16().contiguous()
     # delta_tk = torch.zeros_like(delta_tiled).float()
     delta_tk = torch.zeros_like(delta_tiled).float().transpose(-1, -2).contiguous()
     torch.cuda.synchronize()
@@ -287,7 +296,7 @@ for _ in range(num_iters):
         V_tk,     
         O_tk,     
         dO_tk,    
-        dQ_tk,   
+        dQ_tk_in,   
         dK_tk,    
         dV_tk,    
         L_tk,
@@ -295,7 +304,8 @@ for _ in range(num_iters):
     )
 
     tk_kernel.dispatch_dq_shuffle(
-        dQ_tk,
+        dQ_tk_in,
+        dQ_tk
     )
 
     end_event.record()
@@ -315,15 +325,15 @@ print(f"ThunderKittens performance: {eff_tk:.2f} TFLOPS for {b=} {h=} {n=} {d=} 
 
 if use_aiter:
     out_diff = (out_aiter_bhnd - out_pytorch).abs()
-    q_grad_diff = (q_grad_aiter_bhnd - q_grad_pytorch).abs()
-    k_grad_diff = (k_grad_aiter_bhnd - k_grad_pytorch).abs()
-    v_grad_diff = (v_grad_aiter_bhnd - v_grad_pytorch).abs()
+    q_grad_diff = (q_grad_aiter_bnhd - q_grad_pytorch).abs()
+    k_grad_diff = (k_grad_aiter_bnhd - k_grad_pytorch).abs()
+    v_grad_diff = (v_grad_aiter_bnhd - v_grad_pytorch).abs()
 
 # Compare TK with PyTorch
-out_tiled_diff = (out_tiled_bhnd - out_pytorch).abs()
-q_grad_tiled_diff = (q_grad_tiled_bhnd - q_grad_pytorch).abs()
-k_grad_tiled_diff = (k_grad_tiled_bhnd - k_grad_pytorch).abs()
-v_grad_tiled_diff = (v_grad_tiled_bhnd - v_grad_pytorch).abs()
+out_tiled_diff = (out_tiled_bnhd - out_pytorch).abs()
+q_grad_tiled_diff = (q_grad_tiled_bnhd - q_grad_pytorch).abs()
+k_grad_tiled_diff = (k_grad_tiled_bnhd - k_grad_pytorch).abs()
+v_grad_tiled_diff = (v_grad_tiled_bnhd - v_grad_pytorch).abs()
 
 if use_aiter:
     print(f"\nAITER vs PyTorch comparison:")

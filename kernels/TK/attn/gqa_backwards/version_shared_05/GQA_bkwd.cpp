@@ -50,8 +50,8 @@ __global__ void attend_prep_ker(const attn_prep_globals<D> g) {
     qo_tile<D, float, row_l> dO_float, O_float;
     typename qo_tile<D, float, row_l>::col_vec delta_vec;
 
-    load(dO, g.dOg, {batch_idx, head_idx, seq_idx * NUM_WARPS + warpid,0});
-    load(O,  g.Og,  {batch_idx, head_idx, seq_idx * NUM_WARPS + warpid,0});
+    load<1>(dO, g.dOg, {batch_idx, seq_idx * NUM_WARPS + warpid, head_idx, 0});
+    load<1>(O,  g.Og,  {batch_idx, seq_idx * NUM_WARPS + warpid, head_idx, 0});
     copy(O_float, O);
     copy(dO_float, dO);
     
@@ -357,9 +357,9 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
     int tic = 0, toc = 1;
     load(L_smem, g.L_vec, {batch_idx, head_idx, 0, 0});
     load(delta_smem, g.delta_vec, {batch_idx, head_idx, 0, 0});
-    G::load(K_j_smem, g.K, {batch_idx, head_idx, seq_idx, 0});
-    G::load(Q_i_smem[tic], g.Q, {batch_idx, head_idx, 0, 0});
-    G::load(dO_i_smem[tic], g.dOg, {batch_idx, head_idx, 0, 0});
+    G::load<1, false>(K_j_smem, g.K, {batch_idx, seq_idx, head_idx, 0});
+    G::load<1, false>(Q_i_smem[tic], g.Q, {batch_idx, 0, head_idx, 0});
+    G::load<1, false>(dO_i_smem[tic], g.dOg, {batch_idx, 0, head_idx, 0});
     __builtin_amdgcn_s_waitcnt(0);
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
@@ -369,7 +369,7 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
     }
 
     // 6. Load K_j and V_j from HBM to registers
-    load(V_j, g.V, {batch_idx, head_idx, j, 0});
+    load<1>(V_j, g.V, {batch_idx, j, head_idx, 0});
     // 7. Initialize dK_j = 0 and dV_j = 0
     zero(dK_j_T);
     zero(dV_j_T);
@@ -431,7 +431,7 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
             __builtin_amdgcn_s_barrier();
             __builtin_amdgcn_sched_barrier(0);
 
-            G::load(Q_i_smem[toc], g.Q, {batch_idx, head_idx, i + 1, 0});
+            G::load<1, false>(Q_i_smem[toc], g.Q, {batch_idx, i + 1, head_idx, 0});
             auto attn_i_smem_subtile = subtile_inplace<WARP_SIZE_KV, DOT_SLICE_QO>(attn_i_smem, {warpid, 0});
             store(attn_i_smem_subtile, dP_ij_bf16_accum_row); // bank conflicts
             load(dO_i_col, subtile_inplace<DOT_SLICE_QO, D>(dO_i_smem[tic], {0, 0}));
@@ -521,7 +521,7 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
             __builtin_amdgcn_s_barrier();
             __builtin_amdgcn_sched_barrier(0);
 
-            G::load(dO_i_smem[toc], g.dOg, {batch_idx, head_idx, i + 1, 0});
+            G::load<1, false>(dO_i_smem[toc], g.dOg, {batch_idx, i + 1, head_idx, 0});
             auto attn_i_smem_subtile = subtile_inplace<WARP_SIZE_KV, DOT_SLICE_QO>(attn_i_smem, {warpid, 0});
             store(attn_i_smem_subtile, dP_ij_bf16_accum_row); // bank conflicts
             load(dO_i_col, subtile_inplace<DOT_SLICE_QO, D>(dO_i_smem[tic], {1, 0}));
@@ -751,8 +751,8 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
     kv_tile<D, float, accum_row_l, mfma_32x32x16> dK_j, dV_j;
     swap_layout_and_transpose(dK_j, dK_j_T);
     swap_layout_and_transpose(dV_j, dV_j_T);
-    store(g.dKg, dK_j, {batch_idx, head_idx, j, 0});
-    store(g.dVg, dV_j, {batch_idx, head_idx, j, 0});
+    store<1>(g.dKg, dK_j, {batch_idx, j, head_idx, 0});
+    store<1>(g.dVg, dV_j, {batch_idx, j, head_idx, 0});
 }
 
 template<int D>
@@ -764,7 +764,7 @@ void dispatch_bwd_combined(attn_bwd_combined_globals<D> g) {
 }
 
 template<int D> struct attn_dq_shuffle_globals { 
-    gl<bf16, -1, -1, -1, -1> dQg;
+    gl<bf16, -1, -1, -1, -1> dQg_in, dQg_out;
     dim3 grid() { return dim3(ATTN_B, ATTN_H, ATTN_N / (DOT_SLICE_QO * NUM_WARPS)); }
     dim3 block() { return dim3(NUM_THREADS); }
     size_t dynamic_shared_memory() { return MAX_SHARED_MEMORY; }
@@ -781,8 +781,8 @@ __global__ void attend_dq_shuffle_ker(const attn_dq_shuffle_globals<D> g) {
 
     qo_tile<D, bf16, accum_row_l> dQg;
 
-    load_shuffled<2>(dQg, g.dQg, {batch_idx, head_idx, seq_idx * NUM_WARPS + warpid, 0});
-    store(g.dQg, dQg, {batch_idx, head_idx, seq_idx * NUM_WARPS + warpid, 0});
+    load_shuffled<2>(dQg, g.dQg_in, {batch_idx, head_idx, seq_idx * NUM_WARPS + warpid, 0});
+    store<1>(g.dQg_out, dQg, {batch_idx, seq_idx * NUM_WARPS + warpid, head_idx, 0});
 }
 
 template<int D>
@@ -818,6 +818,7 @@ PYBIND11_MODULE(tk_kernel, m) {
     );
 
     py::bind_function<dispatch_dq_shuffle<ATTN_D>>(m, "dispatch_dq_shuffle", 
-        &attn_dq_shuffle_globals<ATTN_D>::dQg
+        &attn_dq_shuffle_globals<ATTN_D>::dQg_in,
+        &attn_dq_shuffle_globals<ATTN_D>::dQg_out
     );
 }
