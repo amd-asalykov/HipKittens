@@ -55,8 +55,8 @@ class HipKittensFlashAttnFn(Function):
         dO = dO_bnhd.to(torch.bfloat16).contiguous()
 
         # Allocate grads and workspaces
-        dQ_in = torch.empty((B, H, N, D), dtype=torch.bfloat16, device=dev).contiguous()  
-        dQ    = torch.empty((B, N, H, D), dtype=torch.bfloat16, device=dev).contiguous()  
+        dQ_in = torch.zeros((B, H, N, D), dtype=torch.bfloat16, device=dev).contiguous()  # BHND (pre-shuffle)
+        dQ    = torch.empty((B, N, H, D), dtype=torch.bfloat16, device=dev).contiguous()  # BNHD
         dK    = torch.empty((B, N, HKV, D), dtype=torch.bfloat16, device=dev).contiguous()  # BNHD
         dV    = torch.empty((B, N, HKV, D), dtype=torch.bfloat16, device=dev).contiguous()  # BNHD
         delta = torch.empty((B, H, N, 1), dtype=torch.float32,  device=dev).contiguous() 
@@ -74,9 +74,6 @@ class HipKittensFlashAttnFn(Function):
         tk_kernel_bkwd.dispatch_bwd_combined(q, k, v, O, dO, dQ_in, dK, dV, L, delta)
         if dQ_in.isnan().any():
             print("dQ_in is nan")
-            breakpoint()
-        if dQ.isnan().any():
-            print("dQ is nan")
             breakpoint()
         if dK.isnan().any():
             print("dK is nan")
