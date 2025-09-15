@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-colors = ["#7CB9BC", "#8E69B8", "#E59952", "#68AC5A"]
+colors = ["#8E69B8", "#E59952", "#68AC5A", "#7CB9BC"]
 
 for device in ['mi300x', 'mi325x', 'mi350x', 'mi355x']:
 
@@ -48,27 +48,28 @@ for device in ['mi300x', 'mi325x', 'mi350x', 'mi355x']:
     for bar, value in zip(bars0, pytorch_tflops):
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width()/2., height + max_tflops * 0.01,
-                f'{value:.1f}', ha='center', va='bottom', fontsize=12)
+                f'{value:.1f}', ha='center', va='bottom', fontsize=14)
 
     if bars1 is not None:
         for bar, value in zip(bars1, compiled_tflops):
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height + max_tflops * 0.01,
-                    f'{value:.1f}', ha='center', va='bottom', fontsize=12)
+                    f'{value:.1f}', ha='center', va='bottom', fontsize=14)
 
     for bar, value in zip(bars2, tk_tflops):
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width()/2., height + max_tflops * 0.01,
-                f'{value:.1f}', ha='center', va='bottom', fontsize=12)
+                f'{value:.1f}', ha='center', va='bottom', fontsize=14)
 
     # add some padding to the top of the y-axis to prevent label overlap
     ax.set_ylim(0, max_tflops * 1.15)
-    ax.set_xlabel('Sequence Length', fontsize=14)
-    ax.set_ylabel('Performance (TFLOPS)', fontsize=14)
+    ax.set_xlabel('Sequence Length', fontsize=16)
+    ax.set_ylabel('Performance (TFLOPS)', fontsize=16)
     ax.set_title(f'Fused Dropout + Residual + Norm Performance Comparison {device.upper()}', fontsize=16)
     ax.set_xticks(x)
-    ax.set_xticklabels(matrix_sizes)
-    ax.legend(fontsize=14)
+    ax.set_xticklabels(matrix_sizes, fontsize=16)
+    ax.tick_params(axis='y', labelsize=16)
+    ax.legend(fontsize=16)
     # ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
