@@ -193,33 +193,15 @@ __device__ inline static void atomic_store_accum_row(const GL &dst, const RT &sr
             uint32_t val_3_bits = *reinterpret_cast<const uint32_t*>(&val_3);
 
             asm volatile(
-                "buffer_atomic_add_f32 %0, %1, %2, 0 offen\n"
+                "buffer_atomic_add_f32 %0, %1, %8, 0 offen\n"
+                "buffer_atomic_add_f32 %2, %3, %8, 0 offen\n"
+                "buffer_atomic_add_f32 %4, %5, %8, 0 offen\n"
+                "buffer_atomic_add_f32 %6, %7, %8, 0 offen\n"
                 :
                 : "v"(val_0_bits), "v"(byte_offset_0),      // %0, %1
-                  "s"(*(i32x4*)&br)                         // %8
-                : "memory"
-            );
-
-            asm volatile(
-                "buffer_atomic_add_f32 %0, %1, %2, 0 offen\n"
-                :
-                : "v"(val_1_bits), "v"(byte_offset_1),      // %2, %3
-                  "s"(*(i32x4*)&br)                         // %8
-                : "memory"
-            );
-
-            asm volatile(
-                "buffer_atomic_add_f32 %0, %1, %2, 0 offen\n"
-                :
-                : "v"(val_2_bits), "v"(byte_offset_2),      // %4, %5
-                  "s"(*(i32x4*)&br)                         // %8
-                : "memory"
-            );
-
-            asm volatile(
-                "buffer_atomic_add_f32 %0, %1, %2, 0 offen\n"
-                : 
-                : "v"(val_3_bits), "v"(byte_offset_3),      // %6, %7
+                  "v"(val_1_bits), "v"(byte_offset_1),      // %2, %3
+                  "v"(val_2_bits), "v"(byte_offset_2),      // %4, %5
+                  "v"(val_3_bits), "v"(byte_offset_3),      // %6, %7
                   "s"(*(i32x4*)&br)                         // %8
                 : "memory"
             );
@@ -594,9 +576,6 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
     // 8. Process all query heads in this KV group
     // 9. for 1 <= i <= T_r (1024 / 32 = 32)  
     for (int i = 0; i < num_steps - 1; ++i, tic ^= 1, toc ^= 1) {
-        const int prev_q_head_idx = (i - 1) / num_steps_per_head + first_q_head;
-        const int prev_q_seq_idx = (i - 1) % num_steps_per_head;
-
         const int q_head_idx = i / num_steps_per_head + first_q_head;
         const int q_seq_idx = i % num_steps_per_head;
 
@@ -943,11 +922,8 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
         }
     }
 
-    const int prev_q_head_idx = (num_steps_per_head - 2) / num_steps_per_head + first_q_head;
-    const int prev_q_seq_idx = (num_steps_per_head - 2) % num_steps_per_head;
-
-    const int q_head_idx = (num_steps_per_head - 1) / num_steps_per_head + first_q_head;
-    const int q_seq_idx = (num_steps_per_head - 1) % num_steps_per_head;
+    const int q_head_idx = (num_steps - 1) / num_steps_per_head + first_q_head;
+    const int q_seq_idx = (num_steps - 1) % num_steps_per_head;
 
     // Epilogue
     // dot slice 0
@@ -955,7 +931,6 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
         load(K_j, subtile_inplace<WARP_SIZE_KV, D>(K_j_smem, {warpid, 0}));
         load(Q_i, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
         load(L_i, subvec_inplace<DOT_SLICE_QO>(L_smem[tic], 0));
-        // atomic_add_fp32_with_warpid<2>(g.dQg, dQ_i, {batch_idx, prev_q_head_idx, prev_q_seq_idx * 4 + 3, 0}, warpid);
         asm volatile("s_waitcnt lgkmcnt(0)");
         __builtin_amdgcn_s_barrier();
         __builtin_amdgcn_sched_barrier(0);
@@ -977,7 +952,6 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
         // 14. dS_ij = P_ij o (dP_ij - delta_i)
         load(delta_i, subvec_inplace<DOT_SLICE_QO>(delta_smem[tic], 0));
         load(dO_i, subtile_inplace<DOT_SLICE_QO, D>(dO_i_smem[tic][0], {0, 0}));
-        // load(K_j_col, subtile_inplace<256, 16>(K_j_smem, {0, warpid}));
         asm volatile("s_waitcnt lgkmcnt(0)");
         __builtin_amdgcn_s_barrier();
         __builtin_amdgcn_sched_barrier(0);
@@ -1292,7 +1266,6 @@ __global__ void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
     swap_layout_and_transpose(dV_j, dV_j_T);
     store<1>(g.dKg, dK_j, {batch_idx, j, kv_head_idx, 0});
     store<1>(g.dVg, dV_j, {batch_idx, j, kv_head_idx, 0});
-    // atomic_add_fp32_with_warpid<2>(g.dQg, dQ_i, {batch_idx, q_head_idx, q_seq_idx * 4 + 3, 0}, warpid);
 }
 
 template<int D>
