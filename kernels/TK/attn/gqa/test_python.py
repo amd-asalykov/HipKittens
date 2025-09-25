@@ -33,6 +33,19 @@ def efficiency(flop, time):
     time = time / 1e3   # convert to seconds
     return flop / time
 
+def robustness_check(ref, pred):
+    ref = ref.float()
+    pred = pred.float()
+    diff = (ref - pred).abs()
+    denom = ref.abs().clamp_min(1e-6)
+    mask = (diff > (0.001 + 0.05 * denom))
+    error_count = mask.sum().item()
+    numel = ref.numel()
+    rel_error = error_count / numel
+    l2_error = (diff.pow(2).sum().sqrt() / ref.pow(2).sum().sqrt()).item()
+    cos = torch.nn.functional.cosine_similarity(ref.flatten(), pred.flatten(), dim=0).item()
+    return diff, error_count, numel, rel_error, l2_error, cos, mask  
+
 
 num_warmup = 20
 num_iters = 20
@@ -46,7 +59,7 @@ for _ in range(num_warmup):
     q = torch.randn(B, N, H, D, dtype=dtype, device='cuda', requires_grad=True)
     k = torch.randn(B, N, H_KV, D, dtype=dtype, device='cuda', requires_grad=True)
     v = torch.randn(B, N, H_KV, D, dtype=dtype, device='cuda', requires_grad=True)
-    out_ref = aiter.flash_attn_func(q, k, v, causal=causal, return_lse=True, deterministic=True)
+    out_ref, lse_ref = aiter.flash_attn_func(q, k, v, causal=causal, return_lse=True, deterministic=True)
 timings_ref = []
 torch.manual_seed(0)
 random.seed(0)
@@ -56,12 +69,12 @@ for _ in range(num_iters):
     v = torch.randn(B, N, H_KV, D, dtype=dtype, device='cuda', requires_grad=True)
     torch.cuda.synchronize()
     start_event.record()
-    out_ref = aiter.flash_attn_func(q, k, v, causal=causal, return_lse=True, deterministic=True)
+    out_ref, lse_ref = aiter.flash_attn_func(q, k, v, causal=causal, return_lse=True, deterministic=True)
     end_event.record()
     torch.cuda.synchronize()
     elapsed_time = start_event.elapsed_time(end_event)
     timings_ref.append(elapsed_time)
-print(f"{out_ref[0].dtype=}")
+print(f"{out_ref.dtype=}")
 avg_time_ref = sum(timings_ref) / len(timings_ref)
 eff_ref = efficiency(flops_ref, avg_time_ref)
 print(f"AITER (AMD) reference average execution time: {avg_time_ref:.4f} ms")
@@ -70,12 +83,14 @@ print(f"AITER (AMD) reference performance: {eff_ref:.2f} TFLOPS for {B=} {H=} {N
 # Kernel matmul
 for _ in range(num_warmup):
     out = torch.zeros(B, N, H, D, dtype=dtype, device='cuda', requires_grad=True)
+    lse = torch.zeros(B, H, 1, N, dtype=torch.float32, device='cuda', requires_grad=True)
     q = torch.randn(B, N, H, D, dtype=dtype, device='cuda', requires_grad=True)
     k = torch.randn(B, N, H_KV, D, dtype=dtype, device='cuda', requires_grad=True)
     v = torch.randn(B, N, H_KV, D, dtype=dtype, device='cuda', requires_grad=True)
-    tk_kernel.dispatch_micro(q, k, v, out)
+    tk_kernel.dispatch_micro(q, k, v, out, lse)
 timings = []
 out = torch.zeros(B, N, H, D, dtype=dtype, device='cuda', requires_grad=True)
+lse = torch.zeros(B, H, 1, N, dtype=torch.float32, device='cuda', requires_grad=True)
 torch.manual_seed(0)
 random.seed(0)
 for _ in range(num_iters):
@@ -84,7 +99,7 @@ for _ in range(num_iters):
     v = torch.randn(B, N, H_KV, D, dtype=dtype, device='cuda', requires_grad=True)
     torch.cuda.synchronize()
     start_event.record()
-    tk_kernel.dispatch_micro(q, k, v, out)
+    tk_kernel.dispatch_micro(q, k, v, out, lse)
     end_event.record()
     torch.cuda.synchronize()
     elapsed_time = start_event.elapsed_time(end_event)
@@ -96,16 +111,22 @@ print(f"Average execution time: {avg_time:.4f} ms")
 print(f"Performance: {eff:.2f} TFLOPS for {N}x{N} matrix multiplication.\n")
 
 # Compare against reference
-out_float = out.float()
-out_ref_float = out_ref[0].float()
-diff = (out_float - out_ref_float)
-max_error = diff.max().item()
-mean_error = diff.mean().item()
-error_count = (diff > 0.1).sum().item()
-print(f"Max error between kernel and reference: {max_error}")
-print(f"Max error: {max_error}")
-print(f"Mean error: {mean_error}")
-print(f"Number of large errors (>0.1): {error_count}\n")
-print(out_float[0:2, 0, 0, :16])
-print(out_ref_float[0:2, 0, 0, :16])
+num_print = 16
+print(f"\n TK vs AITER comparison:")
+print("\nO outputs:")
+print("TK: ", out[0, 0, :num_print, 0], "Max:", out.max().item())
+print("AITER: ", out_ref[0, 0, :num_print, 0], "Max:", out_ref.max().item())
 
+print("\nLSE outputs:")
+print("TK: ", lse[0, 0, 0, :num_print], "Max:", lse.max().item())
+print("AITER: ", lse_ref[0, 0, :num_print], "Max:", lse_ref.max().item())
+
+print("Robustness check:")
+o_diff, o_err_cnt, o_total, o_rel_error, o_l2_error, o_cos, o_mask = robustness_check(out, out_ref)
+print(f"O: max_abs={o_diff.max().item():.6f}, max_rel={o_rel_error:.4f}, "
+      f"rel_l2={o_l2_error:.4f}, cos={o_cos:.6f}, "
+      f"errors={o_err_cnt}/{o_total} ({100*o_err_cnt/o_total:.4f}%)")
+l_diff, l_err_cnt, l_total, l_rel_error, l_l2_error, l_cos, l_mask = robustness_check(lse, lse_ref.unsqueeze(-1).transpose(-1, -2))
+print(f"LSE: max_abs={l_diff.max().item():.6f}, max_rel={l_rel_error:.4f}, "
+      f"rel_l2={l_l2_error:.4f}, cos={l_cos:.6f}, "
+      f"errors={l_err_cnt}/{l_total} ({100*l_err_cnt/l_total:.4f}%)")

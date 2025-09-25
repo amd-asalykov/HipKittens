@@ -25,6 +25,7 @@ template<int D, typename T=float, typename L=accum_col_l> using attn_tile = rt<T
 
 template<int D> struct attn_globals { 
     _gl_QKVO Qg, Kg, Vg, Og; 
+    gl<float, -1, -1, -1, -1> L_vec;
     dim3 grid() { return dim3(ATTN_H, ((ATTN_N / Q_BLOCK_SIZE + NUM_WARPS - 1) / NUM_WARPS), ATTN_B); }
     dim3 block() { return dim3(NUM_THREADS); }
     size_t dynamic_shared_memory() { return MAX_SHARED_MEMORY; }
@@ -38,8 +39,8 @@ __global__ void attend_ker(const attn_globals<D> g) {
     st_bf<KV_BLOCK_SIZE, ATTN_D, ducks::st_layout::row> (&k_smem)[2] = al.allocate<st_bf<KV_BLOCK_SIZE, ATTN_D, ducks::st_layout::row>, 2>();
     st_bf<KV_BLOCK_SIZE, ATTN_D, ducks::st_layout::accumulator_col> (&v_smem)[2] = al.allocate<st_bf<KV_BLOCK_SIZE, ATTN_D, ducks::st_layout::accumulator_col>, 2>();
     
-    // const int head_idx = (blockIdx.x % 8) * 8 + (blockIdx.x / 8);
-    const int head_idx = blockIdx.x;
+    const int head_idx = (blockIdx.x % 8) * 8 + (blockIdx.x / 8);
+    // const int head_idx = blockIdx.x;
     const int batch_idx = blockIdx.z;
     const int GROUP_SIZE = ATTN_H / ATTN_H_KV;
     const int head_idx_kv = head_idx / GROUP_SIZE;
@@ -431,5 +432,11 @@ void dispatch_micro(attn_globals<D> g) {
 
 PYBIND11_MODULE(tk_kernel, m) {
     m.doc() = "tk_kernel python module";
-    py::bind_function<dispatch_micro<ATTN_D>>(m, "dispatch_micro", &attn_globals<ATTN_D>::Qg, &attn_globals<ATTN_D>::Kg, &attn_globals<ATTN_D>::Vg, &attn_globals<ATTN_D>::Og);
+    py::bind_function<dispatch_micro<ATTN_D>>(m, "dispatch_micro", 
+        &attn_globals<ATTN_D>::Qg, 
+        &attn_globals<ATTN_D>::Kg, 
+        &attn_globals<ATTN_D>::Vg, 
+        &attn_globals<ATTN_D>::Og,
+        &attn_globals<ATTN_D>::L_vec
+    );
 }
