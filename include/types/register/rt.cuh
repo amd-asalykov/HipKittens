@@ -62,17 +62,17 @@ struct rt {
     using dtype = T2; ///< Data type of the matrix elements
 
     static constexpr int rows                = _rows; ///< Total number of rows.
-    static_assert(rows % rt_base<T, layout, matrix_layout>::tile_size_row == 0, "Rows must be divisible by the tile size");
+    static_assert(rows % rt_base<T, layout, matrix_layout>::rows == 0, "Rows must be divisible by the tile size");
     static constexpr int cols                = _cols; ///< Total number of columns.
-    static_assert(cols % rt_base<T, layout, matrix_layout>::tile_size_col == 0, "Columns must be divisible by the tile size");
-    static constexpr int height              = rows / rt_base<T, layout, matrix_layout>::tile_size_row; ///< Height in subtiles.
-    static constexpr int width               = cols / rt_base<T, layout, matrix_layout>::tile_size_col; ///< Width in subtiles.
-    static constexpr int tile_size_row        = rt_base<T, layout, matrix_layout>::tile_size_row;        ///< Size of the base tile.
-    static constexpr int tile_size_col        = rt_base<T, layout, matrix_layout>::tile_size_col;        ///< Size of the base tile.
+    static_assert(cols % rt_base<T, layout, matrix_layout>::cols == 0, "Columns must be divisible by the tile size");
+    static constexpr int height              = rows / rt_base<T, layout, matrix_layout>::rows; ///< Height in subtiles.
+    static constexpr int width               = cols / rt_base<T, layout, matrix_layout>::cols; ///< Width in subtiles.
+    static constexpr int base_tile_rows        = rt_base<T, layout, matrix_layout>::rows;        ///< Size of the base tile.
+    static constexpr int base_tile_cols        = rt_base<T, layout, matrix_layout>::cols;        ///< Size of the base tile.
     static constexpr int num_elements        = rt_base<T, layout, matrix_layout>::num_elements        * width * height; ///< Total number of elements.
     static constexpr int elements_per_thread = rt_base<T, layout, matrix_layout>::elements_per_thread * width * height; ///< Elements handled per thread.
     static constexpr int packed_per_thread   = rt_base<T, layout, matrix_layout>::packed_per_thread   * width * height; ///< Packed elements per thread.
-    static constexpr int packed_per_tile     = rt_base<T, layout, matrix_layout>::packed_per_thread; ///< Packed elements per tile.
+    static constexpr int packed_per_base_tile     = rt_base<T, layout, matrix_layout>::packed_per_thread; ///< Packed elements per tile.
     static constexpr int elements_per_base_tile  = rt_base<T, layout, matrix_layout>::elements_per_thread; ///< Elements per thread per base tile.
 
     rt_base<T, layout, matrix_layout> tiles[height][width]; ///< The actual storage for the matrix tile, organized in subtiles.
@@ -116,7 +116,7 @@ concept row_layout = all<T> && std::is_same_v<typename T::layout, ducks::rt_layo
 template<typename T>
 concept col_layout = all<T> && std::is_same_v<typename T::layout, ducks::rt_layout::col>;
 
-#ifdef KITTENS_CDNA4
+
 template<typename T>
 concept row_like = all<T> && (std::is_same_v<typename T::layout, ducks::rt_layout::row> || std::is_same_v<typename T::layout, ducks::rt_layout::accumulator_row>);
 template<typename T>
@@ -125,8 +125,6 @@ template<typename T>
 concept accumulator_row_layout = all<T> && std::is_same_v<typename T::layout, ducks::rt_layout::accumulator_row>;
 template<typename T>
 concept accumulator_col_layout = all<T> && std::is_same_v<typename T::layout, ducks::rt_layout::accumulator_col>;
-#endif
-
 
 } // namespace rt
 } // namespace ducks

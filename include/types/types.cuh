@@ -52,24 +52,17 @@ using col_vec = T::col_vec;
 // register tile layouts
 using row_l = ducks::rt_layout::row;
 using col_l = ducks::rt_layout::col;
-#ifdef KITTENS_CDNA4
 using accum_col_l = ducks::rt_layout::accumulator_col;
 using accum_row_l = ducks::rt_layout::accumulator_row;
-#endif
 
 // register vector layouts
 using align_l = ducks::rv_layout::align;
 using ortho_l = ducks::rv_layout::ortho;
 using naive_l = ducks::rv_layout::naive;
-#ifdef KITTENS_CDNA4
 using accum_align_l = ducks::rv_layout::accum_align;
-#endif
-
 
 // register matrix layouts
-#ifdef KITTENS_CDNA4
 using mfma_16x16x32 = ducks::rt_matrix::mfma_16x16x32;
 using mfma_32x32x16 = ducks::rt_matrix::mfma_32x32x16;
-#endif
 
 }

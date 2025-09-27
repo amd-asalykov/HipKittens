@@ -19,12 +19,8 @@ namespace rv_layout {
 /**
  * @brief A dummy type used to identify an aligned (32x replicated) layout.
  */
-#ifdef KITTENS_CDNA4
 struct align       { constexpr static int inner_dim = 8; };
 struct accum_align { constexpr static int inner_dim = 1; };
-#else
-struct align { constexpr static int inner_dim = 2; };
-#endif
 /**
  * @brief A dummy type used to identify an orthogonal (2x replicated) layout.
  */
@@ -38,11 +34,7 @@ struct naive { constexpr static int inner_dim = 1; };
  * @brief A concept to check if a type is a register tile layout.
  */
 template<typename T>
-#ifdef KITTENS_CDNA4
 concept all = std::is_same_v<T, align> || std::is_same_v<T, accum_align> || std::is_same_v<T, ortho> || std::is_same_v<T, naive>;
-#else
-concept all = std::is_same_v<T, align> || std::is_same_v<T, ortho> || std::is_same_v<T, naive>;
-#endif
 
 } // namespace rv_layout
 } // namespace ducks
