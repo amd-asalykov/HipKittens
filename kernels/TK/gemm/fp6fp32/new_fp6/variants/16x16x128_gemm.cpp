@@ -15,12 +15,11 @@ using dout = half;
     std::cerr << "HIP error " << hipGetErrorString(_e) \
               << " at " << __FILE__ << ":" << __LINE__ << std::endl; std::exit(1);} } while(0)
 
-constexpr int BLOCK_SIZE_M     = 128;
+constexpr int BLOCK_SIZE_M     = 256;
 constexpr int BLOCK_SIZE_N     = 256;  
-constexpr int K_STEP           = 256;
+constexpr int K_STEP           = 128;
 constexpr int REG_BLOCK_M      = BLOCK_SIZE_M / 2;
 constexpr int REG_BLOCK_N      = BLOCK_SIZE_N / 2;
-constexpr int DOT_SLICE        = 128;
               
 
 #define NUM_WARPS 4
@@ -49,7 +48,7 @@ struct micro_globals {
     size_t dynamic_shared_memory() { return MAX_SHARED_MEMORY; } 
 };
 
-__global__ __launch_bounds__(NUM_THREADS, 2)
+__global__ __launch_bounds__(NUM_THREADS, 1)
 void micro_tk(const micro_globals g) {
     extern __shared__ alignment_dummy __shm[];
     shared_allocator al((int*)&__shm[0]);
@@ -69,8 +68,8 @@ void micro_tk(const micro_globals g) {
         reinterpret_cast<st_f6<BLOCK_SIZE_N, K_STEP>*>(B_base + (reinterpret_cast<uintptr_t>(&Bs[1]) - B_base) * 6 / 8)
     };
 
-    rt_f6<REG_BLOCK_M, DOT_SLICE> A_tile;
-    rt_f6<REG_BLOCK_N, DOT_SLICE> B_tile;
+    rt_f6<REG_BLOCK_M, K_STEP> A_tile;
+    rt_f6<REG_BLOCK_N, K_STEP> B_tile;
     rt_fl<REG_BLOCK_M, REG_BLOCK_N, ducks::rt_layout::accumulator> C_accum;
     zero(C_accum);
 
@@ -94,7 +93,7 @@ void micro_tk(const micro_globals g) {
     int pid_n = (wgid % num_wgid_in_group) / group_size_m;
     // Assign the tile's row/column based on the pid_m and pid_n.
     const int row = pid_m; 
-    const int col = pid_n; 
+    const int col = pid_n;
 
     // Info
     const int warp_id = kittens::warpid();
@@ -115,75 +114,23 @@ void micro_tk(const micro_globals g) {
     prefill_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, 0}, *As_ptrs[tic], swizzled_offsets_A);
     prefill_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, 0}, *Bs_ptrs[tic], swizzled_offsets_B);
 
-    // Load first tile into shared memory
-    load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, 0}, *As_ptrs[tic], swizzled_offsets_A);
-    load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, 0}, *Bs_ptrs[tic], swizzled_offsets_B);
-
-
-    // if (warp_row == 1) {
-    //     __builtin_amdgcn_s_barrier();
-    // }
-
     #pragma unroll
-    for (int tile = 0; tile < num_tiles - 1; ++tile, tic ^= 1, toc ^= 1) {
-
-        // Cluster 0
+    for (int tile = 0; tile < num_tiles; ++tile, tic ^= 1, toc ^= 1) {
+        load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, tile}, *As_ptrs[tic], swizzled_offsets_A);
+        load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, tile}, *Bs_ptrs[tic], swizzled_offsets_B);
+        
         __builtin_amdgcn_s_waitcnt(0);
         __builtin_amdgcn_s_barrier();
-        load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, tile+1}, *As_ptrs[toc], swizzled_offsets_A);
-        load_lds_reg_row_fp6(B_tile, subtile_inplace<REG_BLOCK_N, DOT_SLICE>(*Bs_ptrs[tic], {warp_col, 0}));
-        load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, tile+1}, *Bs_ptrs[toc], swizzled_offsets_B);
-        load_lds_reg_row_fp6(A_tile, subtile_inplace<REG_BLOCK_M, DOT_SLICE>(*As_ptrs[tic], {warp_row, 0}));
 
-        // Cluster 1
+        load_lds_reg_row_fp6(A_tile, subtile_inplace<REG_BLOCK_M, K_STEP>(*As_ptrs[tic], {warp_row, 0}));
+        load_lds_reg_row_fp6(B_tile, subtile_inplace<REG_BLOCK_N, K_STEP>(*Bs_ptrs[tic], {warp_col, 0}));
+
         asm volatile("s_waitcnt lgkmcnt(0)");
-        __builtin_amdgcn_s_barrier();
 
         __builtin_amdgcn_s_setprio(1);
         mma_ABt(C_accum, A_tile, B_tile, C_accum);
         __builtin_amdgcn_s_setprio(0);
-        // __builtin_amdgcn_s_barrier();
-
-        // Cluster 2
-        load_lds_reg_row_fp6(B_tile, subtile_inplace<REG_BLOCK_N, DOT_SLICE>(*Bs_ptrs[tic], {warp_col, 1}));
-        load_lds_reg_row_fp6(A_tile, subtile_inplace<REG_BLOCK_M, DOT_SLICE>(*As_ptrs[tic], {warp_row, 1}));
-
-        // Cluster 3 (compute)
-        asm volatile("s_waitcnt lgkmcnt(0)");
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_s_setprio(1);
-        mma_ABt(C_accum, A_tile, B_tile, C_accum);
-        __builtin_amdgcn_s_setprio(0);
-        // __builtin_amdgcn_s_barrier();
     }
-
-    // Epilogue
-    // Cluster 0
-    // __builtin_amdgcn_sched_barrier(0);
-    load_lds_reg_row_fp6(B_tile, subtile_inplace<REG_BLOCK_N, DOT_SLICE>(*Bs_ptrs[tic], {warp_col, 0}));
-    load_lds_reg_row_fp6(A_tile, subtile_inplace<REG_BLOCK_M, DOT_SLICE>(*As_ptrs[tic], {warp_row, 0}));
-
-    // Cluster 1
-    asm volatile("s_waitcnt lgkmcnt(0)");
-    __builtin_amdgcn_s_barrier(); 
-    __builtin_amdgcn_s_setprio(1);
-    mma_ABt(C_accum, A_tile, B_tile, C_accum);
-    __builtin_amdgcn_s_setprio(0);
-
-    // Cluster 2 (load)
-    load_lds_reg_row_fp6(B_tile, subtile_inplace<REG_BLOCK_N, DOT_SLICE>(*Bs_ptrs[tic], {warp_col, 1}));
-    load_lds_reg_row_fp6(A_tile, subtile_inplace<REG_BLOCK_M, DOT_SLICE>(*As_ptrs[tic], {warp_row, 1}));
-
-    // Cluster 3 (compute)
-    asm volatile("s_waitcnt lgkmcnt(0)");
-    __builtin_amdgcn_s_barrier();
-    __builtin_amdgcn_s_setprio(1);
-    mma_ABt(C_accum, A_tile, B_tile, C_accum);
-    __builtin_amdgcn_s_setprio(0);
-
-    // if (warp_row == 0) {
-    //     __builtin_amdgcn_s_barrier();
-    // }
 
     store(g.c, C_accum, {0, 0, row * 2 + warp_row, col * 2 + warp_col});
 }

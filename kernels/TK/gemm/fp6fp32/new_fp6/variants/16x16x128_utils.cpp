@@ -46,7 +46,7 @@ __device__ inline void prefill_swizzled_offsets(
     using U = typename ST::dtype;
     using U2 = base_types::packing<U>::packed_type;
     const int packed_size = sizeof(U2) / sizeof(U);  // 4 for FP6
-    
+
     constexpr int elem_per_thread = 16 / sizeof(T);  // 8
     constexpr int elem_per_warp = elem_per_thread * kittens::WARP_THREADS; // 512
     const int warp_id = warpid();
