@@ -92,8 +92,9 @@ struct KITTENS_DEFAULT_ALIGN st {
 
         } else if constexpr (underlying_subtile_row_bytes % 32 == 0) {
             const uint32_t offset = sizeof(T)*(r*underlying_subtile_cols + inner_idx);
-            const int swizzle = ((offset % 1024) >> 9) << 4;
-            const int swizzled_offset = (offset ^ swizzle) / sizeof(T);
+            const int first_swizzle = ((offset % 512) >> 7) << 3;
+            const int second_swizzle = ((offset % 1024) >> 8) << 7;
+            const int swizzled_offset = (offset ^ first_swizzle ^ second_swizzle) / sizeof(T);
             return ptr + (outer_idx * underlying_subtile_cols * underlying_rows) + swizzled_offset;
         } else {
             static_assert(false, "Unsupported row byte size");
@@ -121,8 +122,9 @@ struct KITTENS_DEFAULT_ALIGN st {
 
         } else if constexpr (underlying_subtile_row_bytes % 32 == 0) {
             const uint32_t offset = sizeof(T)*(r*underlying_subtile_cols + inner_idx);
-            const int swizzle = ((offset % 1024) >> 9) << 4;
-            const int swizzled_offset = offset ^ swizzle;
+            const int first_swizzle = ((offset % 512) >> 7) << 3;
+            const int second_swizzle = ((offset % 1024) >> 8) << 7;
+            const int swizzled_offset = offset ^ first_swizzle ^ second_swizzle;
             return ptr + (outer_idx * subtile_cols * underlying_rows * sizeof(T)) + swizzled_offset;
         } else {
             static_assert(false, "Unsupported row byte size");
@@ -220,8 +222,9 @@ struct st_subtile {
 
         } else if constexpr (underlying_subtile_row_bytes % 32 == 0) {
             const uint32_t offset = sizeof(T)*(r*underlying_subtile_cols + inner_idx);
-            const int swizzle = ((offset % 1024) >> 9) << 4;
-            const int swizzled_offset = (offset ^ swizzle) / sizeof(T);
+            const int first_swizzle = ((offset % 512) >> 7) << 3;
+            const int second_swizzle = ((offset % 1024) >> 8) << 7;
+            const int swizzled_offset = (offset ^ first_swizzle ^ second_swizzle) / sizeof(T);
             return ptr + (outer_idx * underlying_subtile_cols * underlying_rows) + swizzled_offset;
         } else {
             static_assert(false, "Unsupported row byte size");
@@ -250,8 +253,9 @@ struct st_subtile {
 
         } else if constexpr (underlying_subtile_row_bytes % 32 == 0) {
             const uint32_t offset = sizeof(T)*(r*underlying_subtile_cols + inner_idx);
-            const int swizzle = ((offset % 1024) >> 9) << 4;
-            const int swizzled_offset = offset ^ swizzle;
+            const int first_swizzle = ((offset % 512) >> 7) << 3;
+            const int second_swizzle = ((offset % 1024) >> 8) << 7;
+            const int swizzled_offset = offset ^ first_swizzle ^ second_swizzle;
             return ptr + (outer_idx * underlying_subtile_cols * underlying_rows * sizeof(T)) + swizzled_offset;
         } else {
             static_assert(false, "Unsupported row byte size");
