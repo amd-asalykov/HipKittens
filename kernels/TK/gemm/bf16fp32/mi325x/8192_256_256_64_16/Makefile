@@ -5,8 +5,9 @@ TARGET=tk_kernel
 SRC=256_256_64_16.cpp
 
 # HIP variables
-ROCM_INSTALL_DIR := $(ROCM_PATH)
+ROCM_INSTALL_DIR := /opt/rocm-7.0.0
 HIP_INCLUDE_DIR  := $(ROCM_INSTALL_DIR)/include/hip
+ROCM_INCLUDE_DIR := $(ROCM_INSTALL_DIR)/include
 
 HIPCXX ?= $(ROCM_INSTALL_DIR)/bin/hipcc
 
@@ -20,7 +21,7 @@ endif
 # Common variables and flags
 CXX_STD   := c++20
 ICXXFLAGS := -std=$(CXX_STD)
-ICPPFLAGS := -I${THUNDERKITTENS_ROOT}/include -I$(HIP_INCLUDE_DIR)
+ICPPFLAGS := -I${THUNDERKITTENS_ROOT}/include -I$(ROCM_INCLUDE_DIR) -I$(HIP_INCLUDE_DIR)
 ILDFLAGS  :=
 ILDLIBS   :=
 
@@ -38,13 +39,13 @@ ICXXFLAGS+= -I${THUNDERKITTENS_ROOT}/include -I${THUNDERKITTENS_ROOT}/prototype 
 # Default target
 all: $(TARGET)
 
-LOGDIR := /workdir/data_logs/$(shell date +%m%d_%H%M%S)_outputs
-LOGFILE := $(LOGDIR)/make_build.log
+# LOGDIR := /workdir/data_logs/$(shell date +%m%d_%H%M%S)_outputs
+# LOGFILE := $(LOGDIR)/make_build.log
 
 $(TARGET): $(SRC)
-	@mkdir -p $(LOGDIR)
+	# @mkdir -p $(LOGDIR)
 	$(HIPCXX) $(SRC) $(HIPFLAGS) $(ICXXFLAGS) $(ICPPFLAGS) $(ILDFLAGS) \
-	    -o $(TARGET)$(shell python3-config --extension-suffix) 2>&1 | tee $(LOGFILE)
+	    -o $(TARGET)$(shell python3-config --extension-suffix) 2>&1 # | tee $(LOGFILE)
 
 # Clean target
 clean:
