@@ -8,6 +8,7 @@ from torch.autograd import Function
 
 import tk_kernel_fwd
 import tk_kernel_bkwd
+import tk_kernel_bkwd_prep
 
 
 def segfault_handler(signum, frame):
@@ -18,7 +19,7 @@ def segfault_handler(signum, frame):
     print(f"CUDA memory reserved: {torch.cuda.memory_reserved() / 1e9:.2f} GB")
     import traceback
     traceback.print_stack()
-    breakpoint()
+    breakpoint()    
 
 # Register signal handlers for memory faults
 signal.signal(signal.SIGSEGV, segfault_handler)  # Segmentation fault
@@ -71,9 +72,9 @@ class HipKittensFlashAttnFn(Function):
         # Safely dispatch forward kernel with error handling
         try:
             # print(f"Forward dispatch: q={q.shape}, k={k.shape}, v={v.shape}, O={O.shape}, L={L.shape}")
-            torch.cuda.synchronize()  # Ensure GPU is ready
+            # torch.cuda.synchronize()  # Ensure GPU is ready
             tk_kernel_fwd.dispatch_fwd(q, k, v, O, L)
-            torch.cuda.synchronize()  # Wait for kernel completion
+            # torch.cuda.synchronize()  # Wait for kernel completion
         except RuntimeError as e:
             print(f"CUDA kernel error in forward dispatch: {e}")
             print(f"Tensor shapes - Q: {q.shape}, K: {k.shape}, V: {v.shape}")
@@ -223,9 +224,9 @@ class HipKittensFlashAttnFn(Function):
         # Backward kernels
         try:
             # print(f"Backward prep dispatch: O={O.shape}, dO={dO.shape}, delta={delta.shape}")
-            torch.cuda.synchronize()
-            tk_kernel_bkwd.dispatch_prep(O, dO, delta)
-            torch.cuda.synchronize()
+            # torch.cuda.synchronize()
+            tk_kernel_bkwd_prep.dispatch_prep(O, dO, delta)
+            # torch.cuda.synchronize()
         except RuntimeError as e:
             print(f"CUDA kernel error in dispatch_prep: {e}")
             print(f"Tensor shapes - O: {O.shape}, dO: {dO.shape}, delta: {delta.shape}")
@@ -247,9 +248,9 @@ class HipKittensFlashAttnFn(Function):
             # print(f"Backward combined dispatch: q={q.shape}, k={k.shape}, v={v.shape}")
             # print(f"                          O={O.shape}, dO={dO.shape}, dQ_in={dQ_in.shape}")
             # print(f"                          dK={dK.shape}, dV={dV.shape}, L={L.shape}, delta={delta.shape}")
-            torch.cuda.synchronize()
-            tk_kernel_bkwd.dispatch_bwd_combined(q, k, v, O, dO, dQ_in, dK, dV, L, delta)
-            torch.cuda.synchronize()
+            # torch.cuda.synchronize()
+            tk_kernel_bkwd.dispatch_bwd_combined(q, k, v, dO, dQ_in, dK, dV, L, delta)
+            # torch.cuda.synchronize()
         except RuntimeError as e:
             print(f"CUDA kernel error in dispatch_bwd_combined: {e}")
             print(f"Memory usage: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
@@ -276,9 +277,9 @@ class HipKittensFlashAttnFn(Function):
         
         try:
             # print(f"dQ shuffle dispatch: dQ_in={dQ_in.shape} -> dQ={dQ.shape}")
-            torch.cuda.synchronize()
-            tk_kernel_bkwd.dispatch_dq_shuffle(dQ_in, dQ)
-            torch.cuda.synchronize()
+            # torch.cuda.synchronize()
+            tk_kernel_bkwd_prep.dispatch_dq_shuffle(dQ_in, dQ)
+            # torch.cuda.synchronize()
         except RuntimeError as e:
             print(f"CUDA kernel error in dispatch_dq_shuffle: {e}")
             print(f"Tensor shapes - dQ_in: {dQ_in.shape}, dQ: {dQ.shape}")
