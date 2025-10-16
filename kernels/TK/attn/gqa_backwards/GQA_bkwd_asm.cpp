@@ -168,7 +168,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -224,7 +224,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -279,7 +279,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -334,7 +334,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -403,7 +403,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -460,7 +460,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -515,7 +515,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -570,7 +570,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -634,7 +634,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -688,7 +688,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -742,7 +742,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();
@@ -796,7 +796,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt(P_ij, Q_i, K_j);
       mul(P_ij, P_ij, P_SCALE_FACTOR);
       sub_row<L_i>(P_ij, P_ij);
-      exp(P_ij, P_ij);
+      exp2(P_ij, P_ij);
       copy(P_ij_bf16, P_ij);
       asm volatile("s_waitcnt lgkmcnt(0)");
       __builtin_amdgcn_s_barrier();

@@ -211,7 +211,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       __builtin_amdgcn_s_barrier();
 
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -279,7 +279,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -297,7 +297,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -307,13 +307,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -452,7 +452,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 1
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -523,7 +523,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -541,7 +541,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -551,13 +551,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -696,7 +696,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 2
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -767,7 +767,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -785,7 +785,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -795,13 +795,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -940,7 +940,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 3
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -1011,7 +1011,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -1029,7 +1029,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -1039,13 +1039,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -1196,7 +1196,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 0
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -1269,7 +1269,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -1287,7 +1287,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -1297,13 +1297,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -1444,7 +1444,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 1
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -1516,7 +1516,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -1534,7 +1534,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -1544,13 +1544,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -1689,7 +1689,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 2
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -1760,7 +1760,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -1778,7 +1778,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -1788,13 +1788,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -1933,7 +1933,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 3
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -2004,7 +2004,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -2022,7 +2022,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -2032,13 +2032,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -2185,7 +2185,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     {
 
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -2256,7 +2256,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -2274,7 +2274,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -2284,13 +2284,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -2428,7 +2428,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 1
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -2499,7 +2499,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -2517,7 +2517,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -2527,13 +2527,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -2671,7 +2671,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 2
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -2742,7 +2742,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -2760,7 +2760,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -2770,13 +2770,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -2915,7 +2915,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
     // dot slice 3
     {
       // 10. S_ij = Q_i K_j^T * scale
-      // 11. P_ij = exp(S_ij - L_i)
+      // 11. P_ij = exp2(S_ij - L_i)
       // 13. dP_ij = dO_i @ V_j^T
       // 14. dS_ij = P_ij o (dP_ij - delta_i)
       // mma_ABt(P_ij, Q_i, K_j);
@@ -2986,7 +2986,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 0, 0>(dP_ij, dO_i, V_j);
       sub_row<0, 2, L_i>(P_ij, P_ij);
       mma_ABt<0, 0, 1>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 0>(P_ij, P_ij);
+      exp2<0, 0>(P_ij, P_ij);
       mma_ABt<0, 0, 2>(dP_ij, dO_i, V_j, dP_ij);
       // Load Q_i_col from shared memory to registers
       // load(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}));
@@ -3004,7 +3004,7 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       }();
       load<0, 0>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 0, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 1>(P_ij, P_ij);
+      exp2<0, 1>(P_ij, P_ij);
       mma_ABt<0, 1, 0>(dP_ij, dO_i, V_j);
       load<0, 1>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 1, 1>(dP_ij, dO_i, V_j, dP_ij);
@@ -3014,13 +3014,13 @@ __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(con
       mma_ABt<0, 1, 3>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 0>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 0>(dP_ij, dO_i, V_j);
-      exp<0, 2>(P_ij, P_ij);
+      exp2<0, 2>(P_ij, P_ij);
       mma_ABt<0, 2, 1>(dP_ij, dO_i, V_j, dP_ij);
       copy<0, 1>(P_ij_bf16, P_ij);
       mma_ABt<0, 2, 2>(dP_ij, dO_i, V_j, dP_ij);
       load<0, 2>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 2, 3>(dP_ij, dO_i, V_j, dP_ij);
-      exp<0, 3>(P_ij, P_ij);
+      exp2<0, 3>(P_ij, P_ij);
       mma_ABt<0, 3, 0>(dP_ij, dO_i, V_j);
       load<0, 3>(Q_i_col, subtile_inplace<DOT_SLICE_QO, D>(Q_i_smem[tic][0], {0, 0}), Q_i_col_addr);
       mma_ABt<0, 3, 1>(dP_ij, dO_i, V_j, dP_ij);
