@@ -3,10 +3,10 @@
 #include "utils.cpp"
 
 constexpr int ATTN_B = 16; // batch size
-constexpr int ATTN_H_Q = 16; // number of query heads
-constexpr int ATTN_H_KV = 16; // number of key/value heads (for GQA)
+constexpr int ATTN_H_Q = 64; // number of query heads
+constexpr int ATTN_H_KV = 8; // number of key/value heads (for GQA)
 constexpr int GROUP_SIZE = ATTN_H_Q / ATTN_H_KV; // queries per KV head group
-constexpr int ATTN_N = 8192; // sequence length
+constexpr int ATTN_N = 1024; // sequence length
 constexpr int ATTN_D = 128; // dimension
 constexpr int STEP_QO = 64; // block size for QO
 constexpr int BLOCK_SIZE_KV = 256; // block size for KV
@@ -25,7 +25,7 @@ template<int D> struct attn_bwd_combined_globals {
   gl<bf16, -1, -1, -1, -1> Q, K, V;
   gl<bf16, -1, -1, -1, -1> dOg, dQg, dKg, dVg;
   gl<float, -1, -1, -1, -1> L_vec, delta_vec;
-  dim3 grid() { return dim3((ATTN_N / BLOCK_SIZE_KV), ATTN_H_KV, ATTN_B); }
+  dim3 grid() { return dim3(ATTN_H_KV, (ATTN_N / BLOCK_SIZE_KV), ATTN_B); }
   dim3 block() { return dim3(NUM_THREADS); }
   size_t dynamic_shared_memory() { return MAX_SHARED_MEMORY; }
 };
@@ -34,8 +34,8 @@ template<int D> struct attn_bwd_combined_globals {
 template<int D> __launch_bounds__(NUM_THREADS, 1)
 __global__ __attribute__((amdgpu_num_vgpr(30))) void attend_bwd_combined_ker(const attn_bwd_combined_globals<D> g) {
 
-  const int seq_idx = blockIdx.x;
-  const int kv_head_idx = blockIdx.y; // This is the KV head index
+  const int kv_head_idx  = blockIdx.x;
+  const int seq_idx = blockIdx.y; // This is the KV head index
   const int batch_idx = blockIdx.z;
   const int first_q_head = kv_head_idx * GROUP_SIZE;
 

@@ -4,7 +4,8 @@
 constexpr int ATTN_B = 16; // batch size
 constexpr int ATTN_H = 16; // number of heads
 constexpr int ATTN_H_KV = 16; // number of heads for key and value
-constexpr int ATTN_N = 8192; // sequence length
+constexpr int GROUP_SIZE = ATTN_H / ATTN_H_KV; // queries per KV head group
+constexpr int ATTN_N = 4096; // sequence length
 constexpr int ATTN_D = 128; // dimension
 constexpr int Q_BLOCK_SIZE = 32; // q block size
 constexpr int KV_BLOCK_SIZE = 64; // kv block size
@@ -59,10 +60,8 @@ __global__ void attend_ker(const attn_globals<D> g) {
     st_bf<KV_BLOCK_SIZE, ATTN_D, st_32x32_s> (&k_smem)[2] = al.allocate<st_bf<KV_BLOCK_SIZE, ATTN_D, st_32x32_s>, 2>();
     st_bf<KV_BLOCK_SIZE, ATTN_D, st_8x32_s> (&v_smem)[2] = al.allocate<st_bf<KV_BLOCK_SIZE, ATTN_D, st_8x32_s>, 2>();
     
-    // const int head_idx = (blockIdx.x % 8) * 8 + (blockIdx.x / 8);
-    const int head_idx = blockIdx.x;
+    const int head_idx = (blockIdx.x % GROUP_SIZE) * GROUP_SIZE + (blockIdx.x / GROUP_SIZE);
     const int batch_idx = blockIdx.z;
-    const int GROUP_SIZE = ATTN_H / ATTN_H_KV;
     const int head_idx_kv = head_idx / GROUP_SIZE;
     const int block_tile_idx = blockIdx.y;
     const int tile_idx = block_tile_idx * NUM_WARPS + warpid();
