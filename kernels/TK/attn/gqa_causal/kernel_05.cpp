@@ -152,25 +152,6 @@ __global__ void attend_ker(const attn_globals<D> g) {
     const int stagger = warpid() / 4;
     const int lane = laneid();
 
-    // /********** Readfirstlane hoisting **********/
-    // // Create base buffer resources once
-    // const bf16* k_base = (bf16*)&g.Kg[{batch_idx, 0, head_idx_kv, 0}];
-    // const bf16* v_base = (bf16*)&g.Vg[{batch_idx, 0, head_idx_kv, 0}];
-    // const int k_row_stride = g.Kg.template stride<1>() * sizeof(bf16);
-    // const int v_row_stride = g.Vg.template stride<1>() * sizeof(bf16);
-    // i32x4 k_srsrc_base = make_srsrc(k_base, k_row_stride * ATTN_N, k_row_stride);
-    // i32x4 v_srsrc_base = make_srsrc(v_base, v_row_stride * ATTN_N, v_row_stride);
-    // // Broadcast to SGPRs 
-    // const int32_t ks0 = __builtin_amdgcn_readfirstlane(k_srsrc_base.x);
-    // const int32_t ks1 = __builtin_amdgcn_readfirstlane(k_srsrc_base.y);
-    // const int32_t ks2 = __builtin_amdgcn_readfirstlane(k_srsrc_base.z);
-    // const int32_t ks3 = __builtin_amdgcn_readfirstlane(k_srsrc_base.w);
-    // const int32_t vs0 = __builtin_amdgcn_readfirstlane(v_srsrc_base.x);
-    // const int32_t vs1 = __builtin_amdgcn_readfirstlane(v_srsrc_base.y); 
-    // const int32_t vs2 = __builtin_amdgcn_readfirstlane(v_srsrc_base.z);
-    // const int32_t vs3 = __builtin_amdgcn_readfirstlane(v_srsrc_base.w);
-    // /********** Swizzle **********/
-
     constexpr int num_tiles = ATTN_N / KV_BLOCK_SIZE;
     const int max_tile_idx = block_tile_idx * NUM_WARPS + NUM_WARPS - 1;
     const int max_q_end_pos = (max_tile_idx + 1) * Q_BLOCK_SIZE;
@@ -271,7 +252,6 @@ __global__ void attend_ker(const attn_globals<D> g) {
         exp2(max_vec_prev, max_vec_prev);  
         mul(norm_vec, norm_vec, max_vec_prev);
         col_sum(norm_vec, att_block[0], norm_vec);
-        copy(att_block_bf16, att_block[0]);
         sched_barrier_pairs<16, 3, 2>();
         __builtin_amdgcn_sched_barrier(0);
         __builtin_amdgcn_s_barrier();
@@ -283,7 +263,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
         load(v_reg, v_smem[0]);
         if constexpr (causal) {
             const int kv_end_pos = (j - 1) * KV_BLOCK_SIZE;
-            if (q_start_pos < kv_end_pos) {  // Only mask if needed
+            if (__builtin_expect(q_start_pos < kv_end_pos, 0)) {  // Only mask if needed
                 mask_kv_tile(att_block[1], tile_idx, j - 2, neg_inf_v, lane);
             }
         }
@@ -297,6 +277,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
         __builtin_amdgcn_s_setprio(1);
         mul_col(o_reg, o_reg, max_vec_prev);
         __builtin_amdgcn_sched_barrier(0);
+        copy(att_block_bf16, att_block[0]);
         mma_AtB(o_reg, v_reg, att_block_bf16, o_reg);
         //      Partial softmax for QK1
         copy(max_vec_prev, max_vec);
@@ -331,7 +312,6 @@ __global__ void attend_ker(const attn_globals<D> g) {
         exp2(max_vec_prev, max_vec_prev);  
         mul(norm_vec, norm_vec, max_vec_prev);
         col_sum(norm_vec, att_block[1], norm_vec);
-        copy(att_block_bf16, att_block[1]);
         sched_barrier_pairs<16, 3, 4>();
         __builtin_amdgcn_s_setprio(0);
         __builtin_amdgcn_sched_barrier(0);
@@ -343,23 +323,23 @@ __global__ void attend_ker(const attn_globals<D> g) {
         G::load<1, false>(k_smem[0], g.Kg, {batch_idx, j + 1, head_idx_kv, 0}, swizzled_offsets_K);
         //      Load V1 into registers
         load(v_reg, v_smem[1]);
-        asm volatile("s_waitcnt lgkmcnt(0)");
-        asm volatile("s_waitcnt vmcnt(4)");
-        __builtin_amdgcn_sched_barrier(0);
-        __builtin_amdgcn_s_barrier();
-    
-        // Cluster 6: A1V1
-
-        __builtin_amdgcn_s_setprio(1);
-        mul_col(o_reg, o_reg, max_vec_prev);
-        __builtin_amdgcn_sched_barrier(0);
-        mma_AtB(o_reg, v_reg, att_block_bf16, o_reg);
         if constexpr (causal) {
             const int kv_end_pos = (j) * KV_BLOCK_SIZE;
             if (q_start_pos < kv_end_pos) {  // Only mask if needed
                 mask_kv_tile(att_block[0], tile_idx, j - 1, neg_inf_v, lane);
             }
         }
+        asm volatile("s_waitcnt lgkmcnt(0)");
+        asm volatile("s_waitcnt vmcnt(4)");
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
+    
+        // Cluster 6: A1V1
+        __builtin_amdgcn_s_setprio(1);
+        mul_col(o_reg, o_reg, max_vec_prev);
+        __builtin_amdgcn_sched_barrier(0);
+        copy(att_block_bf16, att_block[1]);
+        mma_AtB(o_reg, v_reg, att_block_bf16, o_reg);
         //      Partial softmax for QK2
         copy(max_vec_prev, max_vec);
         col_max(max_vec, att_block[0], max_vec);
