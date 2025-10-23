@@ -353,7 +353,7 @@ struct wrapper_2d {
         results.push_back(this_result);
     }
 };
-template<typename test, typename RT_SHAPE, typename ST_SHAPE, int H, int W, int NUM_WORKERS=1, typename... args> using wrapper_2d_warp      = wrapper_2d<test, RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, args...>;
+template<typename test, typename RT_SHAPE, typename ST_SHAPE, int H, int W, int NUM_WORKERS=1, typename... args> using wrapper_2d_warp = wrapper_2d<test, RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, args...>;
 
 template<typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_H=8, int MAX_W=8, int NUM_WORKERS=1, typename... args> using sweep_size_2d = loop_h<wrapper_2d, test, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, NUM_WORKERS, MAX_H, args...>;
 template<typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_H=8, int MAX_W=8, int NUM_WORKERS=1, typename... args> using sweep_size_2d_warp = sweep_size_2d<test, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, NUM_WORKERS, args...>;
