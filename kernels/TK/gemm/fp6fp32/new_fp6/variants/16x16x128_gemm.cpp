@@ -59,13 +59,13 @@ void micro_tk(const micro_globals g) {
     uintptr_t B_base = reinterpret_cast<uintptr_t>(&Bs[0]);
 
     st_f6<BLOCK_SIZE_M, K_STEP> *As_ptrs[2] = {
-        reinterpret_cast<st_f6<BLOCK_SIZE_M, K_STEP>*>(A_base + (reinterpret_cast<uintptr_t>(&As[0]) - A_base) * 6 / 8),
-        reinterpret_cast<st_f6<BLOCK_SIZE_M, K_STEP>*>(A_base + (reinterpret_cast<uintptr_t>(&As[1]) - A_base) * 6 / 8)
+        reinterpret_cast<st_f6<BLOCK_SIZE_M, K_STEP>*>(A_base + (reinterpret_cast<uintptr_t>(&As[0]) - A_base)),
+        reinterpret_cast<st_f6<BLOCK_SIZE_M, K_STEP>*>(A_base + (reinterpret_cast<uintptr_t>(&As[1]) - A_base))
     };
 
     st_f6<BLOCK_SIZE_N, K_STEP> *Bs_ptrs[2] = {
-        reinterpret_cast<st_f6<BLOCK_SIZE_N, K_STEP>*>(B_base + (reinterpret_cast<uintptr_t>(&Bs[0]) - B_base) * 6 / 8),
-        reinterpret_cast<st_f6<BLOCK_SIZE_N, K_STEP>*>(B_base + (reinterpret_cast<uintptr_t>(&Bs[1]) - B_base) * 6 / 8)
+        reinterpret_cast<st_f6<BLOCK_SIZE_N, K_STEP>*>(B_base + (reinterpret_cast<uintptr_t>(&Bs[0]) - B_base)),
+        reinterpret_cast<st_f6<BLOCK_SIZE_N, K_STEP>*>(B_base + (reinterpret_cast<uintptr_t>(&Bs[1]) - B_base))
     };
 
     rt_f6<REG_BLOCK_M, K_STEP> A_tile;
@@ -103,7 +103,7 @@ void micro_tk(const micro_globals g) {
 
     int tic = 0;
     int toc = 1;
-    constexpr int bytes_per_thread = 16;
+    constexpr int bytes_per_thread = 12;
     constexpr int memcpy_per_tile_A = (BLOCK_SIZE_M * K_STEP * 6 / 8) / (bytes_per_thread * NUM_THREADS);
     constexpr int memcpy_per_tile_B = (BLOCK_SIZE_N * K_STEP * 6 / 8) / (bytes_per_thread * NUM_THREADS);
 
