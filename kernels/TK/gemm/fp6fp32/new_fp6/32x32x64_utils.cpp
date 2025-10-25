@@ -177,7 +177,6 @@ template<int axis, bool assume_aligned,
 __device__ inline void prefill_swizzled_offsets_fp6(
     const GL& src, const COORD& idx, ST& dst, uint32_t* swizzled_offsets)
 {
-
     using T = typename ST::dtype;
     constexpr int bytes_per_thread = 16;
     constexpr int memcpy_per_tile =  (ST::rows * ST::cols * 6 / 8) / (bytes_per_thread * N_THREADS);
@@ -192,6 +191,8 @@ __device__ inline void prefill_swizzled_offsets_fp6(
     const int bytes_per_base_tile_row = kittens::TILE_COL_DIM<T> * 6 / 8;
     const int tiles_per_row =  ST::cols / kittens::TILE_COL_DIM<T>;
     const int row_stride_bytes = src.template stride<axis>() * 6 / 8;
+
+    const int bytes_per_shared_tile_row = ST::cols * 6 / 8;
 
     #pragma unroll
     for (int i = 0; i < memcpy_per_tile; i++) {
@@ -211,6 +212,10 @@ __device__ inline void prefill_swizzled_offsets_fp6(
         const int col_byte_offset = tile_col_offset * bytes_per_base_tile_row + base_tile_col_byte_offset;
 
         swizzled_offsets[i] = row_offset * row_stride_bytes + col_byte_offset;
+        // const int row_offset = lane_byte_offset / bytes_per_shared_tile_row;
+        // const int col_byte_offset = lane_byte_offset % bytes_per_shared_tile_row;
+
+        // swizzled_offsets[i] = row_offset * row_stride_bytes + col_byte_offset;
     }
 }
 
@@ -290,13 +295,19 @@ __device__ inline void load_global_to_shared_direct_with_swizzled_offsets_fp6(
         for(int j = 0; j < dst.width; j++) {
 
             asm volatile(
-                "ds_read_b128 %0, %2 offset:%3\n"
-                "ds_read_b64 %1, %2 offset:%4\n"
+                "ds_read_b128 %0, %1 offset:%2\n"
                 // "s_waitcnt lgkmcnt(0)\n"
-                : "=v"(*std::bit_cast<__uint128_t*>(&dst.tiles[i][j].data[0])),
-                  "=v"(*std::bit_cast<uint64_t*>(std::bit_cast<uint8_t*>(&dst.tiles[i][j].data[0]) + 16))
+                : "=v"(*std::bit_cast<__uint128_t*>(&dst.tiles[i][j].data[0]))
                 : "v"(addr),
-                "i"(i * row_stride + j * tile_stride),
+                "i"(i * row_stride + j * tile_stride)
+                : "memory"
+            );
+
+            asm volatile(
+                "ds_read_b64 %0, %1 offset:%2\n"
+                // "s_waitcnt lgkmcnt(0)\n"
+                : "=v"(*std::bit_cast<uint64_t*>(std::bit_cast<uint8_t*>(&dst.tiles[i][j].data[0]) + 16))
+                : "v"(addr),
                 "i"(i * row_stride + j * tile_stride + 16)
                 : "memory"
             );
@@ -340,18 +351,25 @@ __device__ inline void load_global_to_shared_direct_with_swizzled_offsets_fp6(
         for(int j = 0; j < dst.width; j++) {
 
             asm volatile(
-                "ds_read_b128 %0, %2 offset:%4\n"
-                "ds_read_b64 %1, %3 offset:%4\n"
+                "ds_read_b128 %0, %1 offset:%2\n"
                 // "s_waitcnt lgkmcnt(0)\n"
-                : "=v"(*std::bit_cast<__uint128_t*>(&dst.tiles[i][j].data[0])),
-                  "=v"(*std::bit_cast<uint64_t*>(std::bit_cast<uint8_t*>(&dst.tiles[i][j].data[0]) + 16))
-                : "v"(addr), "v"(addr_b64), 
+                : "=v"(*std::bit_cast<__uint128_t*>(&dst.tiles[i][j].data[0]))
+                : "v"(addr), 
+                "i"(i * row_stride + j * tile_stride)
+                : "memory"
+            );
+
+            asm volatile(
+                "ds_read_b64 %0, %1 offset:%2\n"
+                // "s_waitcnt lgkmcnt(0)\n"
+                : "=v"(*std::bit_cast<uint64_t*>(std::bit_cast<uint8_t*>(&dst.tiles[i][j].data[0]) + 16))
+                : "v"(addr_b64), 
                 "i"(i * row_stride + j * tile_stride)
                 : "memory"
             );
         }
     }
- }
+}
 
  template<int axis, ducks::rt::row_layout RT, ducks::gl::all GL, ducks::coord::tile COORD=coord<RT>>
 __device__ inline static void store_fp6(const GL &dst, const RT &src, const COORD &idx) {
