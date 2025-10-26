@@ -302,8 +302,33 @@ void micro_tk(const micro_globals g) {
 
 
     // Convert linear block ID to 2D coordinates
+    // Original WGID.
+    // int wgid = (blockIdx.y * gridDim.x) + blockIdx.x;
+    // const int NUM_WGS = gridDim.x * gridDim.y;
+    // const int NUM_XCDS = 8;
+    // const int CUS_PER_XCD = 32;
+    // const int NUM_CUS = CUS_PER_XCD * NUM_XCDS;
+    // // Swizzle chiplet so that wgids are in the same XCD.
+    // wgid = (wgid % NUM_XCDS) * (NUM_WGS / NUM_XCDS) + (wgid / NUM_XCDS);
+    // // Swizzle for better L2 within the same XCD.
+    // const int WGM = 4;
+    // const int num_pid_m = (M + BLOCK_SIZE_M - 1) / BLOCK_SIZE_M;
+    // const int num_pid_n = (N + BLOCK_SIZE_N - 1) / BLOCK_SIZE_N;
+    // int num_wgid_in_group = WGM * num_pid_n;
+    // int group_id = wgid / num_wgid_in_group;
+    // int first_pid_m = group_id * WGM;
+    // int group_size_m = min(num_pid_m - first_pid_m, WGM);
+    // int pid_m = first_pid_m + ((wgid % num_wgid_in_group) % group_size_m);
+    // int pid_n = (wgid % num_wgid_in_group) / group_size_m;
+    // // Assign the tile's row/column based on the pid_m and pid_n.
+    // const int row = pid_m; // blockIdx.x
+    // const int col = pid_n; // blockIdx.y
+
+
     int block_row = blockIdx.y;
     int block_col = blockIdx.x;
+    // int block_row = row;
+    // int block_col = col;
     int block_m = block_row * BLOCK_SIZE_M;
     int block_n = block_col * BLOCK_SIZE_N;
 
