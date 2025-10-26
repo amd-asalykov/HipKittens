@@ -169,6 +169,12 @@ __device__ inline static void do_interleaved_cluster(
         {
             load_global_to_shared_direct_unit_fp6<ST_GL,NUM_THREADS>(0, lds_base, srsrc, row_stride_gl_to_st);
             constexpr int i = 0;
+            
+
+            __builtin_amdgcn_sched_barrier(0);
+            mma_ABt_base_wrapper(c, a, b, c, 0, 2, 0);
+            // __builtin_amdgcn_sched_barrier(0);
+
             asm volatile(
                 "ds_read_b96 %0, %1 offset:%2\n"
                 : "=v"(*reinterpret_cast<__uint96_t*>((reinterpret_cast<uint8_t*>(&dst.tiles[i][0].data[0]))))
@@ -176,10 +182,6 @@ __device__ inline static void do_interleaved_cluster(
                 "i"(i * row_stride_st_to_reg)
                 : "memory"
             );
-
-            __builtin_amdgcn_sched_barrier(0);
-            mma_ABt_base_wrapper(c, a, b, c, 0, 2, 0);
-            // __builtin_amdgcn_sched_barrier(0);
 
             asm volatile(
                 "ds_read_b96 %0, %1 offset:%2\n"
@@ -197,6 +199,11 @@ __device__ inline static void do_interleaved_cluster(
             load_global_to_shared_direct_unit_fp6<ST_GL,NUM_THREADS>(1, lds_base, srsrc, row_stride_gl_to_st);
             constexpr int i = 1;
             
+            // __builtin_amdgcn_sched_barrier(0);
+            mma_ABt_base_wrapper(c, a, b, c, 1, 0, 0);
+            mma_ABt_base_wrapper(c, a, b, c, 1, 1, 0);
+            // __builtin_amdgcn_sched_barrier(0);
+
             asm volatile(
                 "ds_read_b96 %0, %1 offset:%2\n"
                 : "=v"(*reinterpret_cast<__uint96_t*>((reinterpret_cast<uint8_t*>(&dst.tiles[i][0].data[0]))))
@@ -204,10 +211,6 @@ __device__ inline static void do_interleaved_cluster(
                 "i"(i * row_stride_st_to_reg)
                 : "memory"
             );
-            // __builtin_amdgcn_sched_barrier(0);
-            mma_ABt_base_wrapper(c, a, b, c, 1, 0, 0);
-            mma_ABt_base_wrapper(c, a, b, c, 1, 1, 0);
-            // __builtin_amdgcn_sched_barrier(0);
 
             asm volatile(
                 "ds_read_b96 %0, %1 offset:%2\n"
@@ -224,6 +227,12 @@ __device__ inline static void do_interleaved_cluster(
         {
             load_global_to_shared_direct_unit_fp6<ST_GL,NUM_THREADS>(2, lds_base, srsrc, row_stride_gl_to_st);
             constexpr int i = 2;
+            
+            // __builtin_amdgcn_sched_barrier(0);
+            mma_ABt_base_wrapper(c, a, b, c, 2, 0, 0);
+            mma_ABt_base_wrapper(c, a, b, c, 2, 1, 0);
+            // __builtin_amdgcn_sched_barrier(0);
+
             asm volatile(
                 "ds_read_b96 %0, %1 offset:%2\n"
                 : "=v"(*reinterpret_cast<__uint96_t*>((reinterpret_cast<uint8_t*>(&dst.tiles[i][0].data[0]))))
@@ -231,10 +240,6 @@ __device__ inline static void do_interleaved_cluster(
                 "i"(i * row_stride_st_to_reg)
                 : "memory"
             );
-            // __builtin_amdgcn_sched_barrier(0);
-            mma_ABt_base_wrapper(c, a, b, c, 2, 0, 0);
-            mma_ABt_base_wrapper(c, a, b, c, 2, 1, 0);
-            // __builtin_amdgcn_sched_barrier(0);
 
             asm volatile(
                 "ds_read_b96 %0, %1 offset:%2\n"
@@ -251,6 +256,12 @@ __device__ inline static void do_interleaved_cluster(
         {
             load_global_to_shared_direct_unit_fp6<ST_GL,NUM_THREADS>(3, lds_base, srsrc, row_stride_gl_to_st);
             constexpr int i = 3;
+            
+            // __builtin_amdgcn_sched_barrier(0);
+            mma_ABt_base_wrapper(c, a, b, c, 3, 0, 0);
+            mma_ABt_base_wrapper(c, a, b, c, 3, 1, 0);
+            // __builtin_amdgcn_sched_barrier(0);
+
             asm volatile(
                 "ds_read_b96 %0, %1 offset:%2\n"
                 : "=v"(*reinterpret_cast<__uint96_t*>((reinterpret_cast<uint8_t*>(&dst.tiles[i][0].data[0]))))
@@ -258,10 +269,6 @@ __device__ inline static void do_interleaved_cluster(
                 "i"(i * row_stride_st_to_reg)
                 : "memory"
             );
-            // __builtin_amdgcn_sched_barrier(0);
-            mma_ABt_base_wrapper(c, a, b, c, 3, 0, 0);
-            mma_ABt_base_wrapper(c, a, b, c, 3, 1, 0);
-            // __builtin_amdgcn_sched_barrier(0);
 
             asm volatile(
                 "ds_read_b96 %0, %1 offset:%2\n"
