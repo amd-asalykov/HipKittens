@@ -55,19 +55,6 @@ void micro_tk(const micro_globals g) {
     st_f6<BLOCK_SIZE_M, K_STEP> (&As)[2] = al.allocate<st_f6<BLOCK_SIZE_M, K_STEP>, 2>();
     st_f6<BLOCK_SIZE_N, K_STEP> (&Bs)[2] = al.allocate<st_f6<BLOCK_SIZE_N, K_STEP>, 2>();
 
-    uintptr_t A_base = reinterpret_cast<uintptr_t>(&As[0]);
-    uintptr_t B_base = reinterpret_cast<uintptr_t>(&Bs[0]);
-
-    st_f6<BLOCK_SIZE_M, K_STEP> *As_ptrs[2] = {
-        reinterpret_cast<st_f6<BLOCK_SIZE_M, K_STEP>*>(A_base + (reinterpret_cast<uintptr_t>(&As[0]) - A_base)),
-        reinterpret_cast<st_f6<BLOCK_SIZE_M, K_STEP>*>(A_base + (reinterpret_cast<uintptr_t>(&As[1]) - A_base))
-    };
-
-    st_f6<BLOCK_SIZE_N, K_STEP> *Bs_ptrs[2] = {
-        reinterpret_cast<st_f6<BLOCK_SIZE_N, K_STEP>*>(B_base + (reinterpret_cast<uintptr_t>(&Bs[0]) - B_base)),
-        reinterpret_cast<st_f6<BLOCK_SIZE_N, K_STEP>*>(B_base + (reinterpret_cast<uintptr_t>(&Bs[1]) - B_base))
-    };
-
     rt_f6<REG_BLOCK_M, K_STEP> A_tile;
     rt_f6<REG_BLOCK_N, K_STEP> B_tile;
     rt_fl<REG_BLOCK_M, REG_BLOCK_N, ducks::rt_layout::accumulator> C_accum;
@@ -111,19 +98,19 @@ void micro_tk(const micro_globals g) {
     uint32_t swizzled_offsets_A[memcpy_per_tile_A];
     uint32_t swizzled_offsets_B[memcpy_per_tile_B];
 
-    prefill_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, 0}, *As_ptrs[tic], swizzled_offsets_A);
-    prefill_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, 0}, *Bs_ptrs[tic], swizzled_offsets_B);
+    prefill_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, 0}, As[tic], swizzled_offsets_A);
+    prefill_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, 0}, Bs[tic], swizzled_offsets_B);
 
     #pragma unroll
     for (int tile = 0; tile < num_tiles; ++tile, tic ^= 1, toc ^= 1) {
-        load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, tile}, *As_ptrs[tic], swizzled_offsets_A);
-        load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, tile}, *Bs_ptrs[tic], swizzled_offsets_B);
+        load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, tile}, As[tic], swizzled_offsets_A);
+        load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, tile}, Bs[tic], swizzled_offsets_B);
         
         __builtin_amdgcn_s_waitcnt(0);
         __builtin_amdgcn_s_barrier();
 
-        load_lds_reg_row_fp6(A_tile, subtile_inplace<REG_BLOCK_M, K_STEP>(*As_ptrs[tic], {warp_row, 0}));
-        load_lds_reg_row_fp6(B_tile, subtile_inplace<REG_BLOCK_N, K_STEP>(*Bs_ptrs[tic], {warp_col, 0}));
+        load_lds_reg_row_fp6(A_tile, subtile_inplace<REG_BLOCK_M, K_STEP>(As[tic], {warp_row, 0}));
+        load_lds_reg_row_fp6(B_tile, subtile_inplace<REG_BLOCK_N, K_STEP>(Bs[tic], {warp_col, 0}));
 
         asm volatile("s_waitcnt lgkmcnt(0)");
 

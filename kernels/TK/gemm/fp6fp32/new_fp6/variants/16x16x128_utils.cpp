@@ -285,11 +285,11 @@ __device__ inline void load_global_to_shared_direct_with_swizzled_offsets_fp6(
      const int col_byte_offset = 32 * (laneid / 16);  // NOTE: This col_byte_offset is in bytes, not elements.
 
      uint32_t byte_offset = (row_offset * 128 + col_byte_offset);
-     byte_offset ^= (((byte_offset % (16*128)) >> 7) << 4);
+     uint32_t swizzled_byte_offset = byte_offset ^ (((byte_offset % (8*128)) >> 7) << 4);
      uint32_t byte_offset_second = byte_offset + 16;
-     byte_offset_second ^= (((byte_offset_second % (16*128)) >> 7) << 4);
-     uint32_t addr = reinterpret_cast<uintptr_t>(lds_bytes + byte_offset);
-     uint32_t addr_second = reinterpret_cast<uintptr_t>(lds_bytes + byte_offset_second);
+     uint32_t swizzled_byte_offset_second = byte_offset_second ^ (((byte_offset_second % (8*128)) >> 7) << 4);
+     uint32_t addr = reinterpret_cast<uintptr_t>(lds_bytes + swizzled_byte_offset);
+     uint32_t addr_second = reinterpret_cast<uintptr_t>(lds_bytes + swizzled_byte_offset_second);
 
      const int tile_stride = 16 * 128;
      const int row_stride = tile_stride * src.underlying_width;
