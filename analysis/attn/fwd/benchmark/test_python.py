@@ -142,4 +142,30 @@ print(f"LSE: max_abs={l_diff.max().item():.6f}, max_rel={l_rel_error:.4f}, "
     f"rel_l2={l_l2_error:.4f}, cos={l_cos:.6f}, "
     f"errors={l_err_cnt}/{l_total} ({100*l_err_cnt/l_total:.4f}%)")
 
+############## LOGGING OUTPUTS ####################
+max_error = o_diff.max().item()
+mean_error = o_diff.mean().item()
+error_count = o_err_cnt
+data_to_log = {
+    "N": N,
+    "avg_time_ref": avg_time_ref,
+    "tflops_ref": eff_ref,
+    "avg_time": avg_time,
+    "tflops": eff,
+    "max_error": max_error,
+    "mean_error": mean_error,
+    "error_count": error_count,
+}
+import json
+if not os.path.exists(filename):
+    with open(filename, "w") as f:
+        json.dump({}, f, indent=4)
+with open(filename, "r") as f:
+    data = json.load(f)
+    data[str(N)] = data_to_log
+with open(filename, "w") as f:
+    json.dump(data, f, indent=4)
+print(f"Results saved to {filename}")
+############## END LOGGING OUTPUTS ###############
+
     

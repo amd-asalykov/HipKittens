@@ -2,7 +2,19 @@
 GPU_TARGET=CDNA4
 
 TARGET=tk_kernel
-SRC=kernel_v3.cpp
+SRC=tmp.cpp
+
+# parameters
+ATTN_B ?= 16
+ATTN_H ?= 64
+ATTN_H_KV ?= 8
+ATTN_N ?= 8192
+
+CPPFLAGS += -DATTN_B=$(ATTN_B)
+CPPFLAGS += -DATTN_H=$(ATTN_H)
+CPPFLAGS += -DATTN_H_KV=$(ATTN_H_KV)
+CPPFLAGS += -DATTN_N=$(ATTN_N)
+
 # HIP variables
 ROCM_INSTALL_DIR := $(ROCM_PATH)
 HIP_INCLUDE_DIR  := $(ROCM_INSTALL_DIR)/include/hip

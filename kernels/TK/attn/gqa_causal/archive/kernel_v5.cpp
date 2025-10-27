@@ -283,12 +283,6 @@ __global__ void attend_ker(const attn_globals<D> g) {
         G::load<1, false>(k_smem[1], g.Kg, {batch_idx, j, head_idx_kv, 0}, swizzled_offsets_K);
         //      Load V0 into registers
         load(v_reg, v_smem[0]);
-        // if constexpr (causal) {
-        //     const int kv_end_pos = (j - 1) * KV_BLOCK_SIZE;
-        //     if (__builtin_expect(q_start_pos < kv_end_pos, 0)) {  // Only mask if needed
-        //         mask_kv_tile(att_block[1], tile_idx, j - 2, neg_inf_v, lane);
-        //     }
-        // }
         asm volatile("s_waitcnt lgkmcnt(0)");
         asm volatile("s_waitcnt vmcnt(4)");
         __builtin_amdgcn_sched_barrier(0);
@@ -1560,16 +1554,16 @@ __global__ void attend_ker(const attn_globals<D> g) {
 }
 
 template<int D>
-void dispatch_fwd(attn_globals<D> g) {
+void dispatch_micro(attn_globals<D> g) {
     unsigned long mem_size = g.dynamic_shared_memory();
     hipFuncSetAttribute((void*)attend_ker<D>, hipFuncAttributeMaxDynamicSharedMemorySize, mem_size);
     attend_ker<D><<<g.grid(), g.block(), mem_size, g.stream>>>(g);
     hipDeviceSynchronize();
 }
 
-PYBIND11_MODULE(tk_fwd_causal_kernel, m) {
+PYBIND11_MODULE(tk_kernel, m) {
     m.doc() = "tk_kernel python module";
-    py::bind_function<dispatch_fwd<ATTN_D>>(m, "dispatch_fwd", 
+    py::bind_function<dispatch_micro<ATTN_D>>(m, "dispatch_micro", 
         &attn_globals<ATTN_D>::Qg, 
         &attn_globals<ATTN_D>::Kg, 
         &attn_globals<ATTN_D>::Vg, 
