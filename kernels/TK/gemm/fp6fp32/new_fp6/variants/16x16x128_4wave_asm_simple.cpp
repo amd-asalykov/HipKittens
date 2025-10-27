@@ -14,17 +14,17 @@ using dout = float;
     std::cerr << "HIP error " << hipGetErrorString(_e) \
               << " at " << __FILE__ << ":" << __LINE__ << std::endl; std::exit(1);} } while(0)
 
-constexpr int BLOCK_SIZE_M     = 16;
-constexpr int BLOCK_SIZE_N     = 16;  
+constexpr int BLOCK_SIZE_M     = 64;
+constexpr int BLOCK_SIZE_N     = 64;  
 constexpr int K_STEP           = 128;
               
 
 #define NUM_WARPS 1
 #define NUM_THREADS (kittens::WARP_THREADS * NUM_WARPS)
 
-#define M 16
+#define M 64
 #define K 128
-#define N 16
+#define N 64
 
 using _gl_A = gl<din, -1, -1, -1, -1>;
 using _gl_B = gl<din, -1, -1, -1, -1>;
@@ -44,20 +44,20 @@ struct micro_globals {
 constexpr int axis = 2;
 
 
-__global__ __attribute__((amdgpu_num_vgpr(236))) __launch_bounds__(NUM_THREADS, 1)
+__global__ __attribute__((amdgpu_num_vgpr(128))) __launch_bounds__(NUM_THREADS, 1)
 void micro_tk(const micro_globals g) {
     extern __shared__ alignment_dummy __shm[];
     shared_allocator al((int*)&__shm[0]);
 
-    using ST_A = st_fp6<16, 128, st_16x128_s>; // TO CHECK
-    using ST_B = st_fp6<16, 128, st_16x128_s>;
+    using ST_A = st_fp6<64, 128, st_16x128_s>; // TO CHECK
+    using ST_B = st_fp6<64, 128, st_16x128_s>;
     ST_A (&As) = al.allocate<ST_A>(); // TO CHECK
     ST_B (&Bs) = al.allocate<ST_B>();
 
-    using A_0_range          = ducks::rt::split_many_t<ducks::rt::type_list<ducks::rt::range<248, 255>>, 8>; // 6 registers - v[250:255]
-    using B_0_range          = ducks::rt::split_many_t<ducks::rt::type_list<ducks::rt::range<240, 247>>, 8>; // 6 registers - v[244:249]
-    using C_accum_0_range    = ducks::rt::split_many_t<ducks::rt::type_list<ducks::rt::range<256, 259>>, 4>; // 4 registers - a[0:3]
-    using C_vgpr_range       = ducks::rt::split_many_t<ducks::rt::type_list<ducks::rt::range<236, 239>>, 4>; // 4 registers - v[240:243]
+    using A_0_range          = ducks::rt::split_many_t<ducks::rt::type_list<ducks::rt::range<224, 255>>, 8>; // 32 registers - v[224:255]
+    using B_0_range          = ducks::rt::split_many_t<ducks::rt::type_list<ducks::rt::range<192, 223>>, 8>; // 32 registers - v[192:223]
+    using C_accum_0_range    = ducks::rt::split_many_t<ducks::rt::type_list<ducks::rt::range<256, 319>>, 4>; // 64 registers - a[0:63]
+    using C_vgpr_range       = ducks::rt::split_many_t<ducks::rt::type_list<ducks::rt::range<128, 191>>, 4>; // 64 registers - v[128:191]
 
     // Clobber the registers
     ducks::rt::clobber<A_0_range>();
@@ -65,24 +65,26 @@ void micro_tk(const micro_globals g) {
     ducks::rt::clobber<C_accum_0_range>();
     ducks::rt::clobber<C_vgpr_range>();
     
-    rt<fp6, 16, 128, row_l, rt_16x128_s, A_0_range> A_0; // TO CHECK
-    rt<fp6, 16, 128, row_l, rt_16x128_s, B_0_range> B_0;
-    rt<float, 16, 16, col_l, rt_16x16_s, C_accum_0_range> C_accum_0;
-    rt<float, 16, 16, col_l, rt_16x16_s, C_vgpr_range> C_vgpr;
+    rt<fp6, 64, 128, row_l, rt_16x128_s, A_0_range> A_0;
+    rt<fp6, 64, 128, row_l, rt_16x128_s, B_0_range> B_0;
+    rt<float, 64, 64, col_l, rt_16x16_s, C_accum_0_range> C_accum_0;
+    rt<float, 64, 64, col_l, rt_16x16_s, C_vgpr_range> C_vgpr;
 
-    load(As, g.a, {0, 0, 0, 0}); // TO CHECK
+    load(As, g.a, {0, 0, 0, 0});
     load(Bs, g.b, {0, 0, 0, 0});
     __builtin_amdgcn_s_waitcnt(0);
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
 
-    load(A_0, As); // TO CHECK
+    load(A_0, As);
     load(B_0, Bs);
     __builtin_amdgcn_s_waitcnt(0);
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
 
-    mma_ABt(C_accum_0, A_0, B_0); // TO CHECK
+    shuffle_in_place(A_0);
+    shuffle_in_place(B_0);
+    mma_ABt(C_accum_0, A_0, B_0);
     macros::v_nop();
     macros::v_nop();
     macros::v_nop();
