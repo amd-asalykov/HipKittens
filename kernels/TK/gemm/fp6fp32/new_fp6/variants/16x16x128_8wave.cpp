@@ -119,8 +119,83 @@ void micro_tk(const micro_globals g) {
         __builtin_amdgcn_s_barrier();
     }
 
-    {   
-        constexpr int k = 0;
+    // {   
+    //     constexpr int k = 0;
+
+    //     auto as_subtile0 = kittens::subtile_inplace<BLOCK_SIZE_M / WARPS_ROW / 2, K_STEP>(As[tic][0], {warp_m, 0});
+    //     load_lds_reg_row_fp6(a, as_subtile0);
+    //     load_global_to_shared_fp6<axis, false, ST_A, _gl_A, coord<ST_A>, NUM_THREADS>(g.a, {0, 0, block_row * 2 + 1, k + 1}, As[toc][1]);
+
+    //     asm volatile("s_waitcnt lgkmcnt(0)");
+    //     asm volatile("s_waitcnt vmcnt(10)");
+    //     __builtin_amdgcn_s_barrier();
+    //     __builtin_amdgcn_sched_barrier(0);
+
+    //     __builtin_amdgcn_s_setprio(1);
+    //     mma_ABt(cA, a, b0, cA);
+    //     __builtin_amdgcn_s_setprio(0);
+
+    //     __builtin_amdgcn_sched_barrier(0);
+    //     __builtin_amdgcn_s_barrier();
+    //     __builtin_amdgcn_sched_barrier(0);
+
+    //     auto bs_subtile1 = kittens::subtile_inplace<BLOCK_SIZE_N / WARPS_COL / 2, K_STEP>(Bs[tic][1], {warp_n, 0});
+    //     load_lds_reg_row_fp6(b1, bs_subtile1);
+    //     load_global_to_shared_fp6<axis, false, ST_A, _gl_A, coord<ST_A>, NUM_THREADS>(g.a, {0, 0, block_row * 2, k + 2}, As[tic][0]);
+
+    //     asm volatile("s_waitcnt lgkmcnt(0)");
+    //     asm volatile("s_waitcnt vmcnt(10)");
+    //     __builtin_amdgcn_s_barrier();
+    //     __builtin_amdgcn_sched_barrier(0);
+
+    //     __builtin_amdgcn_s_setprio(1);
+    //     mma_ABt(cB, a, b1, cB);
+    //     __builtin_amdgcn_s_setprio(0);
+
+    //     __builtin_amdgcn_sched_barrier(0);
+    //     __builtin_amdgcn_s_barrier();
+    //     __builtin_amdgcn_sched_barrier(0);
+
+    //     auto as_subtile1 = kittens::subtile_inplace<BLOCK_SIZE_M / WARPS_ROW / 2, K_STEP>(As[tic][1], {warp_m, 0});
+    //     load_lds_reg_row_fp6(a, as_subtile1);
+    //     load_global_to_shared_fp6<axis, false, ST_B, _gl_B, coord<ST_B>, NUM_THREADS>(g.b, {0, 0, block_col * 2, k + 2}, Bs[tic][0]);
+
+    //     asm volatile("s_waitcnt lgkmcnt(0)");
+    //     asm volatile("s_waitcnt vmcnt(10)");
+    //     __builtin_amdgcn_s_barrier();
+    //     __builtin_amdgcn_sched_barrier(0);
+
+    //     __builtin_amdgcn_s_setprio(1);
+    //     mma_ABt(cC, a, b0, cC);
+    //     __builtin_amdgcn_s_setprio(0);
+
+    //     __builtin_amdgcn_sched_barrier(0);
+    //     __builtin_amdgcn_s_barrier();
+    //     __builtin_amdgcn_sched_barrier(0);
+
+    //     auto bs_subtile0 = kittens::subtile_inplace<BLOCK_SIZE_N / WARPS_COL / 2, K_STEP>(Bs[toc][0], {warp_n, 0});
+    //     load_lds_reg_row_fp6(b0, bs_subtile0);
+    //     load_global_to_shared_fp6<axis, false, ST_B, _gl_B, coord<ST_B>, NUM_THREADS>(g.b, {0, 0, block_col * 2 + 1, k + 2}, Bs[tic][1]);
+
+    //     __builtin_amdgcn_sched_barrier(0);
+    //     asm volatile("s_waitcnt vmcnt(10)");
+    //     __builtin_amdgcn_s_barrier();
+    //     __builtin_amdgcn_sched_barrier(0);
+
+    //     __builtin_amdgcn_s_setprio(1);
+    //     mma_ABt(cD, a, b1, cD);
+    //     __builtin_amdgcn_s_setprio(0);
+
+    //     __builtin_amdgcn_sched_barrier(0);
+    //     __builtin_amdgcn_s_barrier();
+    //     __builtin_amdgcn_sched_barrier(0);
+    // }
+
+    // tic^=1, toc^=1;
+
+    // Inner loop over K dimension
+    // #pragma unroll
+    for (int k = 0; k < k_iters - 2; k++, tic^=1, toc^=1) {
 
         auto as_subtile0 = kittens::subtile_inplace<BLOCK_SIZE_M / WARPS_ROW / 2, K_STEP>(As[tic][0], {warp_m, 0});
         load_lds_reg_row_fp6(a, as_subtile0);
@@ -176,13 +251,6 @@ void micro_tk(const micro_globals g) {
         auto bs_subtile0 = kittens::subtile_inplace<BLOCK_SIZE_N / WARPS_COL / 2, K_STEP>(Bs[toc][0], {warp_n, 0});
         load_lds_reg_row_fp6(b0, bs_subtile0);
         load_global_to_shared_fp6<axis, false, ST_B, _gl_B, coord<ST_B>, NUM_THREADS>(g.b, {0, 0, block_col * 2 + 1, k + 2}, Bs[tic][1]);
-    }
-
-    tic^=1, toc^=1;
-
-    // Inner loop over K dimension
-    #pragma unroll
-    for (int k = 1; k < k_iters - 2; k++, tic^=1, toc^=1) {
 
         __builtin_amdgcn_sched_barrier(0);
         asm volatile("s_waitcnt vmcnt(10)");
@@ -196,78 +264,10 @@ void micro_tk(const micro_globals g) {
         __builtin_amdgcn_sched_barrier(0);
         __builtin_amdgcn_s_barrier();
         __builtin_amdgcn_sched_barrier(0);
-        
-        auto as_subtile0 = kittens::subtile_inplace<BLOCK_SIZE_M / WARPS_ROW / 2, K_STEP>(As[tic][0], {warp_m, 0});
-        load_lds_reg_row_fp6(a, as_subtile0);
-        load_global_to_shared_fp6<axis, false, ST_A, _gl_A, coord<ST_A>, NUM_THREADS>(g.a, {0, 0, block_row * 2 + 1, k + 1}, As[toc][1]);
-
-        asm volatile("s_waitcnt lgkmcnt(0)");
-        asm volatile("s_waitcnt vmcnt(10)");
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_sched_barrier(0);
-
-        __builtin_amdgcn_s_setprio(1);
-        mma_ABt(cA, a, b0, cA);
-        __builtin_amdgcn_s_setprio(0);
-
-        __builtin_amdgcn_sched_barrier(0);
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_sched_barrier(0);
-
-        auto bs_subtile1 = kittens::subtile_inplace<BLOCK_SIZE_N / WARPS_COL / 2, K_STEP>(Bs[tic][1], {warp_n, 0});
-        load_lds_reg_row_fp6(b1, bs_subtile1);
-        load_global_to_shared_fp6<axis, false, ST_A, _gl_A, coord<ST_A>, NUM_THREADS>(g.a, {0, 0, block_row * 2, k + 2}, As[tic][0]);
-
-        asm volatile("s_waitcnt lgkmcnt(0)");
-        asm volatile("s_waitcnt vmcnt(10)");
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_sched_barrier(0);
-
-        __builtin_amdgcn_s_setprio(1);
-        mma_ABt(cB, a, b1, cB);
-        __builtin_amdgcn_s_setprio(0);
-
-        __builtin_amdgcn_sched_barrier(0);
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_sched_barrier(0);
-
-        auto as_subtile1 = kittens::subtile_inplace<BLOCK_SIZE_M / WARPS_ROW / 2, K_STEP>(As[tic][1], {warp_m, 0});
-        load_lds_reg_row_fp6(a, as_subtile1);
-        load_global_to_shared_fp6<axis, false, ST_B, _gl_B, coord<ST_B>, NUM_THREADS>(g.b, {0, 0, block_col * 2, k + 2}, Bs[tic][0]);
-
-        asm volatile("s_waitcnt lgkmcnt(0)");
-        asm volatile("s_waitcnt vmcnt(10)");
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_sched_barrier(0);
-
-        __builtin_amdgcn_s_setprio(1);
-        mma_ABt(cC, a, b0, cC);
-        __builtin_amdgcn_s_setprio(0);
-
-        __builtin_amdgcn_sched_barrier(0);
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_sched_barrier(0);
-
-        auto bs_subtile0 = kittens::subtile_inplace<BLOCK_SIZE_N / WARPS_COL / 2, K_STEP>(Bs[toc][0], {warp_n, 0});
-        load_lds_reg_row_fp6(b0, bs_subtile0);
-        load_global_to_shared_fp6<axis, false, ST_B, _gl_B, coord<ST_B>, NUM_THREADS>(g.b, {0, 0, block_col * 2 + 1, k + 2}, Bs[tic][1]);
     }
 
     {
         constexpr int k = k_iters - 2;
-
-        __builtin_amdgcn_sched_barrier(0);
-        asm volatile("s_waitcnt vmcnt(10)");
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_sched_barrier(0);
-
-        __builtin_amdgcn_s_setprio(1);
-        mma_ABt(cD, a, b1, cD);
-        __builtin_amdgcn_s_setprio(0);
-
-        __builtin_amdgcn_sched_barrier(0);
-        __builtin_amdgcn_s_barrier();
-        __builtin_amdgcn_sched_barrier(0);
 
         auto as_subtile0 = kittens::subtile_inplace<BLOCK_SIZE_M / WARPS_ROW / 2, K_STEP>(As[tic][0], {warp_m, 0});
         load_lds_reg_row_fp6(a, as_subtile0);
@@ -320,11 +320,7 @@ void micro_tk(const micro_globals g) {
 
         auto bs_subtile0 = kittens::subtile_inplace<BLOCK_SIZE_N / WARPS_COL / 2, K_STEP>(Bs[toc][0], {warp_n, 0});
         load_lds_reg_row_fp6(b0, bs_subtile0);
-    }
 
-    tic^=1, toc^=1;
-
-    {
         __builtin_amdgcn_sched_barrier(0);
         asm volatile("s_waitcnt vmcnt(0)");
         __builtin_amdgcn_s_barrier();
@@ -337,7 +333,11 @@ void micro_tk(const micro_globals g) {
         __builtin_amdgcn_sched_barrier(0);
         __builtin_amdgcn_s_barrier();
         __builtin_amdgcn_sched_barrier(0);
+    }
 
+    tic^=1, toc^=1;
+
+    {
         auto as_subtile0 = kittens::subtile_inplace<BLOCK_SIZE_M / WARPS_ROW / 2, K_STEP>(As[tic][0], {warp_m, 0});
         load_lds_reg_row_fp6(a, as_subtile0);
 
