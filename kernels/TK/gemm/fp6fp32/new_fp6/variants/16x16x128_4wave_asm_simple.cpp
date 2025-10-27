@@ -101,16 +101,16 @@ void micro_tk(const micro_globals g) {
     int tic = 0, toc = 1;
 
     G::load(As[tic][0], g.a, {0, 0, row*2, 0});
-    G::load(As[tic][1], g.a, {0, 0, row*2+1, 0});
     G::load(Bs[tic][0], g.b, {0, 0, col*2, 0});
     G::load(Bs[tic][1], g.b, {0, 0, col*2+1, 0});
+    G::load(As[tic][1], g.a, {0, 0, row*2+1, 0});
 
     {
         constexpr int k = 0;
         G::load(As[toc][0], g.a, {0, 0, row*2, k+1});
-        G::load(As[toc][1], g.a, {0, 0, row*2+1, k+1});
         G::load(Bs[toc][0], g.b, {0, 0, col*2, k+1});
         G::load(Bs[toc][1], g.b, {0, 0, col*2+1, k+1});
+        G::load(As[toc][1], g.a, {0, 0, row*2+1, k+1});
 
         asm volatile("s_waitcnt vmcnt(16)");
         __builtin_amdgcn_s_barrier();
@@ -118,30 +118,31 @@ void micro_tk(const micro_globals g) {
 
         auto a_subtile_0 = kittens::subtile_inplace<64, 128>(As[tic][0], {warp_row, 0});
         load(A_0, a_subtile_0);
-        auto a_subtile_1 = kittens::subtile_inplace<64, 128>(As[tic][1], {warp_row, 0});
-        load(A_1, a_subtile_1);
         auto b_subtile_0 = kittens::subtile_inplace<64, 128>(Bs[tic][0], {warp_col, 0});
         load(B_0, b_subtile_0);
         auto b_subtile_1 = kittens::subtile_inplace<64, 128>(Bs[tic][1], {warp_col, 0});
         load(B_1, b_subtile_1);
+        auto a_subtile_1 = kittens::subtile_inplace<64, 128>(As[tic][1], {warp_row, 0});
+        load(A_1, a_subtile_1);
         asm volatile("s_waitcnt lgkmcnt(0)");
         __builtin_amdgcn_sched_barrier(0);
 
         shuffle_in_place(A_0);
         shuffle_in_place(B_0);
-        shuffle_in_place(A_1);
         shuffle_in_place(B_1);
+        shuffle_in_place(A_1);
         mma_ABt(C_accum_00, B_0, A_0);
         mma_ABt(C_accum_01, B_1, A_0);
         mma_ABt(C_accum_10, B_0, A_1);
         mma_ABt(C_accum_11, B_1, A_1);
     }
     tic ^= 1, toc ^= 1;
+    #pragma unroll
     for (int k = 1; k < k_iters - 1; k++, tic ^= 1, toc ^= 1) {
         G::load(As[toc][0], g.a, {0, 0, row*2, k+1});
-        G::load(As[toc][1], g.a, {0, 0, row*2+1, k+1});
         G::load(Bs[toc][0], g.b, {0, 0, col*2, k+1});
         G::load(Bs[toc][1], g.b, {0, 0, col*2+1, k+1});
+        G::load(As[toc][1], g.a, {0, 0, row*2+1, k+1});
 
         asm volatile("s_waitcnt vmcnt(16)");
         __builtin_amdgcn_s_barrier();
@@ -149,19 +150,19 @@ void micro_tk(const micro_globals g) {
 
         auto a_subtile_0 = kittens::subtile_inplace<64, 128>(As[tic][0], {warp_row, 0});
         load(A_0, a_subtile_0);
-        auto a_subtile_1 = kittens::subtile_inplace<64, 128>(As[tic][1], {warp_row, 0});
-        load(A_1, a_subtile_1);
         auto b_subtile_0 = kittens::subtile_inplace<64, 128>(Bs[tic][0], {warp_col, 0});
         load(B_0, b_subtile_0);
         auto b_subtile_1 = kittens::subtile_inplace<64, 128>(Bs[tic][1], {warp_col, 0});
         load(B_1, b_subtile_1);
+        auto a_subtile_1 = kittens::subtile_inplace<64, 128>(As[tic][1], {warp_row, 0});
+        load(A_1, a_subtile_1);
         asm volatile("s_waitcnt lgkmcnt(0)");
         __builtin_amdgcn_sched_barrier(0);
 
         shuffle_in_place(A_0);
         shuffle_in_place(B_0);
-        shuffle_in_place(A_1);
         shuffle_in_place(B_1);
+        shuffle_in_place(A_1);
         mma_ABt(C_accum_00, B_0, A_0, C_accum_00);
         mma_ABt(C_accum_01, B_1, A_0, C_accum_01);
         mma_ABt(C_accum_10, B_0, A_1, C_accum_10);
@@ -174,19 +175,19 @@ void micro_tk(const micro_globals g) {
 
         auto a_subtile_0 = kittens::subtile_inplace<64, 128>(As[tic][0], {warp_row, 0});
         load(A_0, a_subtile_0);
-        auto a_subtile_1 = kittens::subtile_inplace<64, 128>(As[tic][1], {warp_row, 0});
-        load(A_1, a_subtile_1);
         auto b_subtile_0 = kittens::subtile_inplace<64, 128>(Bs[tic][0], {warp_col, 0});
         load(B_0, b_subtile_0);
         auto b_subtile_1 = kittens::subtile_inplace<64, 128>(Bs[tic][1], {warp_col, 0});
         load(B_1, b_subtile_1);
+        auto a_subtile_1 = kittens::subtile_inplace<64, 128>(As[tic][1], {warp_row, 0});
+        load(A_1, a_subtile_1);
         asm volatile("s_waitcnt lgkmcnt(0)");
         __builtin_amdgcn_sched_barrier(0);
 
         shuffle_in_place(A_0);
         shuffle_in_place(B_0);
-        shuffle_in_place(A_1);
         shuffle_in_place(B_1);
+        shuffle_in_place(A_1);
         mma_ABt(C_accum_00, B_0, A_0, C_accum_00);
         mma_ABt(C_accum_01, B_1, A_0, C_accum_01);
         mma_ABt(C_accum_10, B_0, A_1, C_accum_10);
