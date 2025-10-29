@@ -63,10 +63,10 @@ for device in ['mi350x', 'mi355x']:
     max_tflops = max(max(hipblaslt_vals), max(tk_vals), max(ck_vals))
 
     # Create bar chart
-    x = np.arange(len(matrix_sizes)) * 0.2  # Reduce spacing between clusters
-    width = 0.06
+    x = np.arange(len(matrix_sizes)) # Reduce spacing between clusters
+    width = 0.28
 
-    fig, ax = plt.subplots(figsize=(15, 8))
+    fig, ax = plt.subplots(figsize=(10, 6))
     first_bar = x - 3*width
     second_bar = x - 2*width
     third_bar = x - width
@@ -78,49 +78,52 @@ for device in ['mi350x', 'mi355x']:
     bars5 = ax.bar(first_bar, ck_vals, width, label='Composable Kernel', color=color_map["composable_kernel"])
 
     # Plot X markers for OOM
-    oom_height = 150
+    oom_height = 120
+    markersize = 18
+    markeredgewidth = 3
+    fontsize = 13
 
     for idx in hipblaslt_oom:
-        ax.plot(x[idx] - 2*width, oom_height, 'x', color=color_map["hipblaslt"], markersize=25, markeredgewidth=6)
-        ax.text(x[idx] - 2*width, oom_height + max_tflops * 0.03, 'OOM', ha='center', va='bottom', fontsize=18, color=color_map["hipblaslt"])
+        ax.plot(x[idx] - 2*width, oom_height, 'x', color=color_map["hipblaslt"], markersize=markersize, markeredgewidth=markeredgewidth)
+        ax.text(x[idx] - 2*width, oom_height + max_tflops * 0.03, 'OOM', ha='center', va='bottom', fontsize=fontsize, color=color_map["hipblaslt"])
 
     for idx in tk_oom:
-        ax.plot(x[idx], oom_height, 'x', color=color_map["hipkittens"], markersize=25, markeredgewidth=6)
-        ax.text(x[idx], oom_height + max_tflops * 0.03, 'OOM', ha='center', va='bottom', fontsize=18, color=color_map["hipkittens"])
+        ax.plot(x[idx], oom_height, 'x', color=color_map["hipkittens"], markersize=markersize, markeredgewidth=markeredgewidth)
+        ax.text(x[idx], oom_height + max_tflops * 0.03, 'OOM', ha='center', va='bottom', fontsize=fontsize, color=color_map["hipkittens"])
 
     for idx in ck_oom:
-        ax.plot(x[idx] - 3*width, oom_height, 'x', color=color_map["composable_kernel"], markersize=25, markeredgewidth=6)
-        ax.text(x[idx] - 3*width, oom_height + max_tflops * 0.03, 'OOM', ha='center', va='bottom', fontsize=18, color=color_map["composable_kernel"])
+        ax.plot(x[idx] - 3*width, oom_height, 'x', color=color_map["composable_kernel"], markersize=markersize, markeredgewidth=markeredgewidth)
+        ax.text(x[idx] - 3*width, oom_height + max_tflops * 0.03, 'OOM', ha='center', va='bottom', fontsize=fontsize, color=color_map["composable_kernel"])
 
     # Add value labels on bars
     for bar, value in zip(bars2, hipblaslt_vals):
         if value > 0:
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height + max_tflops * 0.01,
-                    f'{value:.0f}', ha='center', va='bottom', fontsize=20)
+                    f'{value:.0f}', ha='center', va='bottom', fontsize=12)
 
     for bar, value in zip(bars3, tk_vals):
         if value > 0:
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height + max_tflops * 0.01,
-                    f'{value:.0f}', ha='center', va='bottom', fontsize=20)
+                    f'{value:.0f}', ha='center', va='bottom', fontsize=12)
 
     for bar, value in zip(bars5, ck_vals):
         if value > 0:
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height + max_tflops * 0.01,
-                    f'{value:.0f}', ha='center', va='bottom', fontsize=20)
+                    f'{value:.0f}', ha='center', va='bottom', fontsize=12)
 
     # Set y-axis with more spaced out ticks
     ax.set_ylim(0, max_tflops * 1.15)
     # Create more spaced out y-axis ticks (every 200 TFLOPS instead of default)
-    ax.set_xlabel('Matrix Size (N×N)', fontsize=26)
-    ax.set_ylabel('Performance (TFLOPS)', fontsize=26)
-    ax.set_title(f'FP8 GEMM Performance Comparison {device.upper()}', fontsize=26)
+    ax.set_xlabel('Matrix Size (N×N)', fontsize=16)
+    ax.set_ylabel('Performance (TFLOPS)', fontsize=16)
+    ax.set_title(f'FP8 GEMM Performance Comparison {device.upper()}', fontsize=16)
     ax.set_xticks(x)
-    ax.set_xticklabels(matrix_sizes, fontsize=20)
-    ax.tick_params(axis='y', labelsize=20)
-    ax.legend(fontsize=24)
+    ax.set_xticklabels(matrix_sizes, fontsize=14)
+    ax.tick_params(axis='y', labelsize=14)
+    ax.legend(fontsize=16)
 
     plt.tight_layout()
     plt.show()
