@@ -14,10 +14,8 @@ HIPFLAGS+= -O0
 else ifeq ($(COMP_LEVEL),debug)
 HIPFLAGS+= -g -O0
 else ifeq ($(COMP_LEVEL),profile)
-HIPFLAGS+= -O3 -save-temps=obj -Rpass-analysis=kernel-resource-usage
+HIPFLAGS+= -O3 -Rpass-analysis=kernel-resource-usage //--save-temps
 endif
-
-HIPFLAGS+= -DFP8_USE_16x128
 
 CXXFLAGS ?= -Wall -Wextra
 CXXFLAGS := -w

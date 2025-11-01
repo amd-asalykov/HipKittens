@@ -17,8 +17,6 @@ else ifeq ($(COMP_LEVEL),profile)
 HIPFLAGS+= -O3 -Rpass-analysis=kernel-resource-usage # --save-temps
 endif
 
-HIPFLAGS+= -DFP8_USE_16x128
-
 CXXFLAGS ?= -Wall -Wextra
 CXXFLAGS := -w
 

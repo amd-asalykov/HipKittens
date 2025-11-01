@@ -34,7 +34,7 @@ using rt_16x32 = rt_shape<16, 32, 8>;
 using rt_32x16 = rt_shape<32, 16, 8>;
 using rt_32x16_4 = rt_shape<32, 16, 4>;
 using rt_16x32_4 = rt_shape<16, 32, 4>;
-using rt_16x128 = rt_shape<16, 128, 32>;
+using rt_16x128 = rt_shape<16, 128, 16>;
 
 template<typename T>
 concept all = std::is_same_v<T, rt_16x16> || 

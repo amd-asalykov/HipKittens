@@ -211,11 +211,11 @@ struct st_16x128 {
     }
 
     template<typename _T>
-    __device__ __forceinline__ static const uint32_t swizzle (int2 coord) {
+    __device__ __forceinline__ static const uint32_t swizzle (int2 coord, uint32_t base_addr) {
         const int r = coord.x, c = coord.y;
         using T = _T;
 
-        const uint32_t offset = sizeof(T)*(r*cols + c);
+        const uint32_t offset = base_addr + sizeof(T)*(r*cols + c);
 
         if constexpr (sizeof(T) == 1) {
             const int swizzle = ((offset % (16*128)) >> 8) << 4;

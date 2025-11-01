@@ -21,10 +21,12 @@ namespace kittens {
  *
  * @tparam RT The register tile type
  * @tparam ST The shared tile type
+ * @tparam swizzle_src_ptr Whether the swizzled offset includes the ST
+ *          base pointer. Optional register pressure optimization.
  * @param dst[out] The destination register tile.
  * @param src[in]  The source shared tile.
  */
-template<ducks::rt::row_layout RT, ducks::st::all ST>
+template<ducks::rt::row_layout RT, ducks::st::all ST, bool swizzle_src_ptr = false>
 __device__ inline static void load(RT &dst, const ST &src) {
 
     static_assert(RT::rows == ST::rows, "register tile and shared tile must match rows");
@@ -58,10 +60,15 @@ __device__ inline static void load(RT &dst, const ST &src) {
                 for (int j = 0; j < register_subtiles_per_shared_subtile_row; j++) {
                     const int row = i * RT::base_tile_rows + row_offset;
                     const int col = j * RT::base_tile_cols + col_offset + k * RT::base_tile_elements_per_stride_group;
-                    const uint32_t swizzled_offset = src.swizzle({row, col});
-                    const uint32_t next_swizzled_offset = src.swizzle({row, col + 4});
-                    const uint32_t addr = src_ptr + swizzled_offset;
-                    const uint32_t next_addr = src_ptr + next_swizzled_offset;
+                    const uint32_t addr = [&] {
+                        if constexpr (swizzle_src_ptr) {
+                            const uint32_t swizzled_offset = src.swizzle({row, col}, src_ptr);
+                            return swizzled_offset;
+                        } else {
+                            const uint32_t swizzled_offset = src.swizzle({row, col});
+                            return src_ptr + swizzled_offset;
+                        }
+                    }();
 
                     const int idx = k * RT::base_tile_stride / packing;
 
@@ -75,28 +82,24 @@ __device__ inline static void load(RT &dst, const ST &src) {
                             const int register_row = ii * register_subtiles_per_shared_subtile_col + i;
                             const int register_col = jj * register_subtiles_per_shared_subtile_row + j;
 
-                            // TODO: fp8e4m3
-                            if constexpr (std::is_same_v<U2, bf16_2>) {
-                                if constexpr (RT::base_tile_stride == 8) {
-                                    asm volatile(
-                                        "ds_read_b128 %0, %1 offset:%2\n"
-                                        : "=v"(*reinterpret_cast<float4*>(&dst.tiles[register_row][register_col].data[idx]))
-                                        : "v"(addr), "i"(offset)
-                                        : "memory"
-                                    );
-                                // Use ds_read_b64 for stride == 4, dtype == bf16
-                                } else if constexpr (RT::base_tile_stride == 4) {
-                                    asm volatile(
-                                        "ds_read_b64 %0, %1 offset:%2\n"
-                                        : "=v"(*reinterpret_cast<float2*>(&dst.tiles[register_row][register_col].data[idx]))
-                                        : "v"(addr), "i"(offset)
-                                        : "memory"
-                                    );
-                                } else {
-                                    static_assert(false, "Unsupported stride");
-                                }
+                            if constexpr ((std::is_same_v<U2, bf16_2> && RT::base_tile_stride == 8) ||
+                                            (std::is_same_v<U2, fp8e4m3_4> &&RT::base_tile_stride == 16)) {
+                                asm volatile(
+                                    "ds_read_b128 %0, %1 offset:%2\n"
+                                    : "=v"(*reinterpret_cast<float4*>(&dst.tiles[register_row][register_col].data[idx]))
+                                    : "v"(addr), "i"(offset)
+                                    : "memory"
+                                );
+                            // Use ds_read_b64 for stride == 4, dtype == bf16
+                            } else if constexpr (RT::base_tile_stride == 4) {
+                                asm volatile(
+                                    "ds_read_b64 %0, %1 offset:%2\n"
+                                    : "=v"(*reinterpret_cast<float2*>(&dst.tiles[register_row][register_col].data[idx]))
+                                    : "v"(addr), "i"(offset)
+                                    : "memory"
+                                );
                             } else {
-                                static_assert(false, "Unsupported type");
+                                static_assert(false, "Unsupported stride-type combination");
                             }
                         }
                     }
@@ -134,38 +137,34 @@ __device__ inline static void load(RT &dst, const ST &src) {
                     const int shared_subtile_id = shared_row * ST::underlying_subtiles_per_row + shared_col;
                     const int offset = shared_subtile_id * ST::underlying_subtile_bytes;
 
-                    if constexpr (std::is_same_v<U2, bf16_2>) {
-                        // Special handling for 32x16 and stride == 8
-                        if constexpr (RT::base_tile_stride == 8 && (std::is_same_v<typename ST::shape, st_32x16_s>)) {
-                            asm volatile(
-                                "ds_read_b64 %0, %2 offset:%4\n"
-                                "ds_read_b64 %1, %3 offset:%4\n"
-                                : "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j].data[idx])),
-                                  "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j].data[idx + 2]))
-                                : "v"(addr), "v"(next_addr), "i"(offset)
-                                : "memory"
-                            );
-                        // Use ds_read_b128 for stride == 8, dtype == bf16
-                        } else if constexpr (RT::base_tile_stride == 8) {
-                            asm volatile(
-                                "ds_read_b128 %0, %1 offset:%2\n"
-                                : "=v"(*reinterpret_cast<float4*>(&dst.tiles[i][j].data[idx]))
-                                : "v"(addr), "i"(offset)
-                                : "memory"
-                            );
-                        // Use ds_read_b64 for stride == 4, dtype == bf16
-                        } else if constexpr (RT::base_tile_stride == 4) {
-                            asm volatile(
-                                "ds_read_b64 %0, %1 offset:%2\n"
-                                : "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j].data[idx]))
-                                : "v"(addr), "i"(offset)
-                                : "memory"
-                            );
-                        } else {
-                            static_assert(false, "Unsupported stride");
-                        }
+                    if constexpr (std::is_same_v<U2, bf16_2> && RT::base_tile_stride == 8 && (std::is_same_v<typename ST::shape, st_32x16_s>)) {
+                        asm volatile(
+                            "ds_read_b64 %0, %2 offset:%4\n"
+                            "ds_read_b64 %1, %3 offset:%4\n"
+                            : "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j].data[idx])),
+                            "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j].data[idx + 2]))
+                            : "v"(addr), "v"(next_addr), "i"(offset)
+                            : "memory"
+                        );
+                    // Use ds_read_b128 for stride == 8, dtype == bf16
+                    } else if constexpr ((std::is_same_v<U2, bf16_2> && RT::base_tile_stride == 8) ||
+                                            (std::is_same_v<U2, fp8e4m3_4> && RT::base_tile_stride == 16)) {
+                        asm volatile(
+                            "ds_read_b128 %0, %1 offset:%2\n"
+                            : "=v"(*reinterpret_cast<float4*>(&dst.tiles[i][j].data[idx]))
+                            : "v"(addr), "i"(offset)
+                            : "memory"
+                        );
+                    // Use ds_read_b64 for stride == 4, dtype == bf16
+                    } else if constexpr (std::is_same_v<U2, bf16_2> && RT::base_tile_stride == 4) {
+                        asm volatile(
+                            "ds_read_b64 %0, %1 offset:%2\n"
+                            : "=v"(*reinterpret_cast<float2*>(&dst.tiles[i][j].data[idx]))
+                            : "v"(addr), "i"(offset)
+                            : "memory"
+                        );
                     } else {
-                        static_assert(false, "Unsupported type");
+                        static_assert(false, "Unsupported stride-type combination");
                     }
                 }
             }
