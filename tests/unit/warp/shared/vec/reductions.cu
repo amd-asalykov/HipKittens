@@ -13,7 +13,8 @@ struct vec_norm {
     template<int S, int NW, gl_t GL>
     __host__ static void host_func(const std::vector<float> &i_ref, std::vector<float> &o_ref) {
         // turns out to get the numerics right in bf16 you have to actually simulate the reduction tree :/
-        kittens::bf16 sum[32] = __float2bfloat16(0.f);
+        kittens::bf16 sum[32];
+        for(int i = 0; i < 32; i++) sum[i] = __float2bfloat16(0.f);
         if constexpr (S > 1) {
             for(int i = 0; i < 32; i++) sum[i] = __float2bfloat16(abs(i_ref[i]));
             for(int i = 32; i < o_ref.size(); i++) sum[i%32] += __float2bfloat16(abs(i_ref[i]));
@@ -40,10 +41,22 @@ struct vec_norm {
         kittens::col_vec<kittens::st<dtype, 16*S, 16*S>> &vec    = al.allocate<kittens::col_vec<kittens::st<dtype, 16*S, 16*S>>>();
         kittens::col_vec<kittens::st<dtype, 16*S, 16*S>> &absvec = al.allocate<kittens::col_vec<kittens::st<dtype, 16*S, 16*S>>>();
         kittens::load(vec, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::abs(absvec, vec);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         dtype f = kittens::base_types::constants<dtype>::one();
         kittens::sum(f, absvec, f);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::div(vec, vec, f);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::store(output, vec, {});
     }
 };

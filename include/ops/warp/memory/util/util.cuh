@@ -71,9 +71,11 @@ struct buffer_resource {
     uint32_t range;
     uint32_t config;
 };
+
 __device__ inline buffer_resource make_buffer_resource(uint64_t ptr, uint32_t range, uint32_t config) {
     return {ptr, range, config};
 }
+
 __device__ inline i32x4 make_srsrc(const void* ptr, uint32_t range_bytes, uint32_t row_stride_bytes = 0) {
     std::uintptr_t as_int = reinterpret_cast<std::uintptr_t>(ptr);   // width = sizeof(void*)
     std::uint64_t  as_u64 = static_cast<std::uint64_t>(as_int);    // widen if host is 32-bit
@@ -91,9 +93,6 @@ __device__ inline i32x4 make_srsrc(const void* ptr, uint32_t range_bytes, uint32
 
     return *reinterpret_cast<const i32x4*>(&rsrc);
 }
-
-__device__ uint32_t llvm_amdgcn_raw_buffer_load_b32(i32x4 srsrc, uint32_t voffset, uint32_t soffset, uint32_t coherency)
-    __asm("llvm.amdgcn.raw.buffer.load.i32");
 
 __device__ uint64_t llvm_amdgcn_raw_buffer_load_b64(i32x4 srsrc, uint32_t voffset, uint32_t soffset, uint32_t coherency)
     __asm("llvm.amdgcn.raw.buffer.load.i64");
@@ -116,17 +115,51 @@ __device__ void llvm_amdgcn_raw_buffer_store_b64(uint64_t vdata, i32x4 srsrc, ui
 __device__ void llvm_amdgcn_raw_buffer_store_b128(__uint128_t vdata, i32x4 srsrc, uint32_t voffset, uint32_t soffset, uint32_t coherency)
     __asm("llvm.amdgcn.raw.buffer.store.i128");
 
-using as3_uint32_ptr = uint32_t __attribute__((address_space(3)))*;
-using int32x4_t = int32_t __attribute__((ext_vector_type(4)));
 
-extern "C" __device__ void 
-llvm_amdgcn_raw_buffer_load_lds(int32x4_t rsrc, // does not change (buffer resource; scalar array?)
-                                as3_uint32_ptr lds_ptr, // does not change
-                                int size, // does not change (16 bytes)
-                                int voffset, 
-                                int soffset, 
-                                int offset,  // does not change (0); instruction offset
-                                int aux) __asm("llvm.amdgcn.raw.buffer.load.lds"); // cache coherency
+__device__ inline float2 load_global_vec2_async(const float2* gptr) {
+    float2 v;
+    // Use global_load_dwordx2 which is more cache-friendly than flat_load
+    asm volatile(
+        "global_load_dwordx2 %0, %1, off\n"
+        : "=v"(v) 
+        : "v"(gptr)
+        : "memory"
+    );
+    return v;   
+}
+
+__device__ inline float4 load_global_vec4_async(const float4* gptr) {
+    float4 v;
+    // Use global_load_dwordx4 which is more cache-friendly than flat_load
+    asm volatile(
+        "global_load_dwordx4 %0, %1, off\n"
+        : "=v"(v) 
+        : "v"(gptr)
+        : "memory"
+    );
+    return v;   
+}
+
+__device__ inline void store_global_b128_async(void* gptr, __uint128_t value) {
+    asm volatile(
+        "global_store_dwordx4 %0, %1, off\n"
+        :
+        : "v"(gptr), "v"(value)
+        : "memory"
+    );
+}
+
+__device__ inline float2 load_shared_vec_async(uint32_t lds_off) {
+    float2 result;
+    asm volatile(
+        "ds_read_b64 %0, %1\n"
+        // "s_waitcnt lgkmcnt(0)\n"
+        : "=v"(result)              // Output: store result in float2
+        : "v"(lds_off)              // Input: LDS offset to read from
+        : "memory"
+    );
+    return result;
+}
 
 /* ----------   To prevent generic addressing  ---------- */
 

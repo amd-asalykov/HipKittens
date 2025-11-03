@@ -2,11 +2,7 @@
 
 #ifdef TEST_WARP_REGISTER_VEC_MAPS
 
-#ifdef KITTENS_CDNA4
-#define LENGTH 32
-#else
 #define LENGTH 16
-#endif
 
 struct vec_add1 {
     using dtype = float;

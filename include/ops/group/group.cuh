@@ -25,6 +25,7 @@ __device__ static inline int warpid() { return laneid() / kittens::WARP_THREADS;
 __device__ static inline int groupid() { return threadIdx.x / GROUP_THREADS; }
 
 #include "memory/memory.cuh"
+#include "shared/shared.cuh"
 };
 
 using warpgroup = group<4>; // special scope commonly used by SM_90 and later.

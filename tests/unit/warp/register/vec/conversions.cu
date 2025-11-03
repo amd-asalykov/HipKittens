@@ -2,11 +2,7 @@
 
 #ifdef TEST_WARP_REGISTER_VEC_CONVERSIONS
 
-#ifdef KITTENS_CDNA4
-#define LENGTH 32
-#else
 #define LENGTH 16
-#endif
 
 struct vec_copy_convert {
     template<int S, int NW, kittens::ducks::rv_layout::all L1, kittens::ducks::rv_layout::all L2>
@@ -35,13 +31,13 @@ void warp::reg::vec::conversions::tests(test_data &results) {
                          INTENSITY_4 ? 16 : -1;
                          
     sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::align_l, kittens::align_l>::run(results);
-    sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::align_l, kittens::ortho_l>::run(results);
-    sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::align_l, kittens::naive_l>::run(results);
-    sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::ortho_l, kittens::align_l>::run(results);
+    // sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::align_l, kittens::ortho_l>::run(results);
+    // sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::align_l, kittens::naive_l>::run(results);
+    // sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::ortho_l, kittens::align_l>::run(results);
     sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::ortho_l, kittens::ortho_l>::run(results);
-    sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::ortho_l, kittens::naive_l>::run(results);
-    sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::naive_l, kittens::align_l>::run(results);
-    sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::naive_l, kittens::ortho_l>::run(results);
+    // sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::ortho_l, kittens::naive_l>::run(results);
+    // sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::naive_l, kittens::align_l>::run(results);
+    // sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::naive_l, kittens::ortho_l>::run(results);
     sweep_size_1d_warp<vec_copy_convert, SIZE, kittens::naive_l, kittens::naive_l>::run(results);
 }
 

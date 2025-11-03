@@ -28,13 +28,11 @@ struct col {}; // for the B-matrix of MMA ops.
 /**
  * @brief A concept to check if a type is a register tile layout.
  */
-
 template<typename T>
 concept all = std::is_same_v<T, row> || std::is_same_v<T, col>;
 
 /**
  * @brief A struct to generate a transposed layout.
- * Note: on CDNA4, the accumulator layout becomes the col layout when transposed.
  */
 template<all L> struct transpose      { using type = col; };
 template<>      struct transpose<col> { using type = row; };

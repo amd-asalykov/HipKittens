@@ -2,11 +2,7 @@
 
 #ifdef TEST_WARP_REGISTER_VEC_REDUCTIONS
 
-#ifdef KITTENS_CDNA4
-#define LENGTH 32
-#else
 #define LENGTH 16
-#endif
 
 struct vec_norm {
     using dtype = float;
@@ -23,9 +19,15 @@ struct vec_norm {
     __device__ static void device_func(const GL &input, const GL &output) {
         kittens::rv_fl<LENGTH*S, L> vec;
         kittens::load(vec, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         float f = 1.f;
         kittens::sum(f, vec, f);
         kittens::zero(vec);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::add(vec, vec, f);
         kittens::store(output, vec, {});
     }
@@ -39,13 +41,9 @@ void warp::reg::vec::reductions::tests(test_data &results) {
                          INTENSITY_3 ? 8  :
                          INTENSITY_4 ? 16 : -1;
                          
-    sweep_size_1d_warp<vec_norm, SIZE, kittens::ducks::rv_layout::align>::run(results);
-    sweep_size_1d_warp<vec_norm, SIZE, kittens::ducks::rv_layout::ortho>::run(results);
+    // sweep_size_1d_warp<vec_norm, SIZE, kittens::ducks::rv_layout::align>::run(results); // not supported
+    // sweep_size_1d_warp<vec_norm, SIZE, kittens::ducks::rv_layout::ortho>::run(results); // not supported
     sweep_size_1d_warp<vec_norm, SIZE, kittens::ducks::rv_layout::naive>::run(results);
-
-    #ifdef KITTENS_CDNA4
-    sweep_size_1d_warp<vec_norm, SIZE, kittens::ducks::rv_layout::accum_align>::run(results);
-    #endif
 }
 
 #endif

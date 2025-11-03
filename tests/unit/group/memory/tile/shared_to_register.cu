@@ -17,11 +17,12 @@ struct group_shared_reg_load_store {
     template<int H, int W, int NW, gl_t GL, kittens::ducks::rt_layout::all RL> __device__ static void device_func(const GL &input, const GL &output) {
         using G = kittens::group<NW>;
         extern __shared__ kittens::alignment_dummy __shm[]; // this is the CUDA shared memory
-        kittens::shared_allocator<16> al((int*)&__shm[0]); 
-        kittens::st<dtype, 16*H, 16*W> &shared_tile = al.allocate<kittens::st<dtype, 16*H, 16*W>>();
+        kittens::shared_allocator<16> al((int*)&__shm[0]);
+        using ST = kittens::st<dtype, kittens::TILE_ROW_DIM<dtype>*H, kittens::TILE_COL_DIM<dtype>*W>;
+        ST &shared_tile = al.allocate<ST>();
         G::load(shared_tile, input, {});
         __syncthreads();
-        kittens::rt<dtype, 16*H/NW, 16*W, RL> reg_tile;
+        kittens::rt<dtype, kittens::TILE_ROW_DIM<dtype>*H/NW, kittens::TILE_COL_DIM<dtype>*W, RL> reg_tile;
         G::load(reg_tile, shared_tile);
         __syncthreads();
         G::store(shared_tile, reg_tile);
@@ -37,12 +38,13 @@ void group::memory::tile::shared_to_register::tests(test_data &results) {
                          INTENSITY_3 ? 8  :
                          INTENSITY_4 ? 16 : -1;
 
-    sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 2, kittens::ducks::rt_layout::row>::run(results);
-    sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 2, kittens::ducks::rt_layout::col>::run(results);
-    sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 4, kittens::ducks::rt_layout::row>::run(results);
-    sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 4, kittens::ducks::rt_layout::col>::run(results);
-    sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 12, kittens::ducks::rt_layout::row>::run(results);
-    sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 12, kittens::ducks::rt_layout::col>::run(results);
+    // float not supported in global_to_shared ops used by shared_to_register
+    // sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 2, kittens::ducks::rt_layout::row>::run(results);
+    // sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 2, kittens::ducks::rt_layout::col>::run(results);
+    // sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 4, kittens::ducks::rt_layout::row>::run(results);
+    // sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 4, kittens::ducks::rt_layout::col>::run(results);
+    // sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 12, kittens::ducks::rt_layout::row>::run(results);
+    // sweep_size_2d<group_shared_reg_load_store<float>, SIZE, SIZE, 12, kittens::ducks::rt_layout::col>::run(results);
     sweep_size_2d<group_shared_reg_load_store<kittens::bf16>, SIZE, SIZE, 2, kittens::ducks::rt_layout::row>::run(results);
     sweep_size_2d<group_shared_reg_load_store<kittens::bf16>, SIZE, SIZE, 2, kittens::ducks::rt_layout::col>::run(results);
     sweep_size_2d<group_shared_reg_load_store<kittens::bf16>, SIZE, SIZE, 4, kittens::ducks::rt_layout::row>::run(results);

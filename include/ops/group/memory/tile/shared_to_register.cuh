@@ -43,14 +43,14 @@ __device__ inline static void load(RT &dst, const ST &src) {
         for (int j = 0; j < dst.width; j++) {
             int col = j * dst.tile_size_col + col_offset;
             if constexpr (std::is_same_v<typename RT::layout, ducks::rt_layout::row>) { // handle the row-major layout
-                dst.tiles[i][j].data[0] = base_types::convertor<T2, U2>::convert(*(U2*)(&src[{row, col+0}]));
-                dst.tiles[i][j].data[1] = base_types::convertor<T2, U2>::convert(*(U2*)(&src[{row, col+2}]));
+                dst.tiles[i][j].data[0] = base_types::convertor<T2, U2>::convert(*(U2*)(&src.data[row * src.underlying_rows + col]));
+                dst.tiles[i][j].data[1] = base_types::convertor<T2, U2>::convert(*(U2*)(&src.data[row * src.underlying_rows + col + 2]));
             }
             else { // handle the column-major layout
                 U2 tmp[2];
                 
-                tmp[0] = U2{*(U*)(&src[{row+0, col}]), *(U*)(&src[{row+1, col}]) };
-                tmp[1] = U2{*(U*)(&src[{row+2, col}]), *(U*)(&src[{row+3, col}]) };
+                tmp[0] = U2{*(U*)(&src.data[row * src.underlying_rows + col]), *(U*)(&src.data[(row + 1) * src.underlying_rows + col]) };
+                tmp[1] = U2{*(U*)(&src.data[(row + 2) * src.underlying_rows + col]), *(U*)(&src.data[(row + 3) * src.underlying_rows + col]) };
 
                 dst.tiles[i][j].data[0] = base_types::convertor<T2, U2>::convert(tmp[0]);
                 dst.tiles[i][j].data[1] = base_types::convertor<T2, U2>::convert(tmp[1]);
@@ -99,8 +99,8 @@ __device__ inline static void store(ST &dst, const RT &src) {
         for(int j = 0; j < src.width; j++) {
             int col = j * src.tile_size_col + col_offset;
             if constexpr (std::is_same_v<typename RT::layout, ducks::rt_layout::row>) { // handle the row-major layout
-                *(U2*)(&dst[{row, col+0}]) = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[0]);
-                *(U2*)(&dst[{row, col+2}]) = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[1]);
+                *(U2*)(&dst.data[row * dst.underlying_rows + col]) = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[0]);
+                *(U2*)(&dst.data[row * dst.underlying_rows + col + 2]) = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[1]);
             }
             else { // handle the column-major layout
                 U2 tmp[2];
@@ -108,10 +108,10 @@ __device__ inline static void store(ST &dst, const RT &src) {
                 tmp[0] = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[0]);
                 tmp[1] = base_types::convertor<U2, T2>::convert(src.tiles[i][j].data[1]);
 
-                *(U*)(&dst[{row+0, col}]) = std::bit_cast<U>(tmp[0].x);
-                *(U*)(&dst[{row+1, col}]) = std::bit_cast<U>(tmp[0].y);
-                *(U*)(&dst[{row+2, col}]) = std::bit_cast<U>(tmp[1].x);
-                *(U*)(&dst[{row+3, col}]) = std::bit_cast<U>(tmp[1].y);
+                *(U*)(&dst.data[row * dst.underlying_rows + col]) = std::bit_cast<U>(tmp[0].x);
+                *(U*)(&dst.data[(row + 1) * dst.underlying_rows + col]) = std::bit_cast<U>(tmp[0].y);
+                *(U*)(&dst.data[(row + 2) * dst.underlying_rows + col]) = std::bit_cast<U>(tmp[1].x);
+                *(U*)(&dst.data[(row + 3) * dst.underlying_rows + col]) = std::bit_cast<U>(tmp[1].y);
             }            
         }
     }

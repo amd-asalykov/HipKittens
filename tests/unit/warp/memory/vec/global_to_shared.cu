@@ -2,11 +2,7 @@
 
 #ifdef TEST_WARP_MEMORY_VEC_GLOBAL_TO_SHARED
 
-#ifdef KITTENS_CDNA4
-#define LENGTH 32
-#else
 #define LENGTH 16
-#endif
 
 template<typename T>
 struct shared_vec_load_store {

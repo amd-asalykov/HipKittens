@@ -2,40 +2,42 @@
 
 #ifdef TEST_WARP_MEMORY_TILE_GLOBAL_TO_REGISTER
 
-template<typename Ker, typename RT_SHAPE, typename ST_SHAPE, int H, int W, int NW, kittens::ducks::gl::all GL, typename... args>
+template<typename Ker, typename T, int H, int W, int NW, kittens::ducks::gl::all GL, typename... args>
 static __global__ void g2r_global_wrapper_2d(const GL &input, const GL &output) {
-    Ker::template device_func<RT_SHAPE, ST_SHAPE, H, W, NW, GL, args...>(input, output);
+    Ker::template device_func<H, W, NW, GL, args...>(input, output);
 }
-template<typename test, typename RT_SHAPE, typename ST_SHAPE, int H, int W, int NUM_WORKERS, typename... args>
+template<typename test, int H, int W, int NUM_WORKERS, kittens::ducks::rt_layout::all L, typename... args>
 struct g2r_wrapper_2d {
     using dtype = gmem_dtype<test>; // defaults to bf16 in global memory if the test doesn't specify.
     using rt_dtype = test::rt_dtype;
     static void run(test_data& results) {
         test_info this_result;
-        this_result.label = generate_test_name<RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, args...>(test::test_identifier);
-        if constexpr (test::template valid<RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, args...>::value) {
+        this_result.label = generate_test_name<H,W,NUM_WORKERS,args...>(test::test_identifier);
+        if constexpr (test::template valid<H, W, NUM_WORKERS, L, args...>::value) {
             constexpr int B = 3, D = 1, R = 4, C = 5;
-            constexpr int SIZE = H*W*RT_SHAPE::cols*RT_SHAPE::rows * B * D * R * C;
+            constexpr int rt_height = kittens::rt_base<rt_dtype, L>::rows;
+            constexpr int rt_width = kittens::rt_base<rt_dtype, L>::cols;
+            constexpr int SIZE = H*W*rt_height*rt_width * B * D * R * C;
             // initialize
             dtype *d_i, *d_o;
             std::vector<float> i_ref(SIZE);
             std::vector<float> o_ref(SIZE);
             initialize(&d_i, &d_o, i_ref, o_ref);
             // make descriptors
-            using GL = typename kittens::gl<dtype, -1, D, -1, RT_SHAPE::cols*C*W>;
-            GL input (d_i, B, nullptr, RT_SHAPE::rows*R*H, nullptr);
-            GL output(d_o, B, nullptr, RT_SHAPE::rows*R*H, nullptr);
+            using GL = typename kittens::gl<dtype, -1, D, -1, C*W*rt_width>;
+            GL input (d_i, B, nullptr, rt_height*R*H, nullptr);
+            GL output(d_o, B, nullptr, rt_height*R*H, nullptr);
             // run kernel
             hipFuncSetAttribute(
-                reinterpret_cast<void *>(global_wrapper_2d<test, RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, GL, args...>),
+                reinterpret_cast<void *>(global_wrapper_2d<test, dtype, H, W, NUM_WORKERS, GL, L, args...>),
                 hipFuncAttributeMaxDynamicSharedMemorySize,
                 kittens::MAX_SHARED_MEMORY
             );
-            global_wrapper_2d<test, RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, GL, args...><<<1, NUM_WORKERS*kittens::WARP_THREADS, kittens::MAX_SHARED_MEMORY>>>(input, output);
+            global_wrapper_2d<test, dtype, H, W, NUM_WORKERS, GL, L, args...><<<1, NUM_WORKERS*kittens::WARP_THREADS, kittens::MAX_SHARED_MEMORY>>>(input, output);
             // fill in correct results on cpu
-            test::template host_func<RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, GL, args...>(i_ref, o_ref);
+            test::template host_func<H, W, NUM_WORKERS, GL, L, args...>(i_ref, o_ref);
             // check and cleanup
-            this_result.result = validate(d_i, d_o, i_ref, o_ref, this_result.label, W*RT_SHAPE::cols);
+            this_result.result = validate(d_i, d_o, i_ref, o_ref, this_result.label, W*rt_width);
         }
         else {
             this_result.result = test_result::INVALID;
@@ -43,23 +45,25 @@ struct g2r_wrapper_2d {
         results.push_back(this_result);
     }
 };
-template<typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_H=8, int MAX_W=8, int NUM_WORKERS=1, typename... args> 
-using g2r_sweep_size_2d = loop_h<g2r_wrapper_2d, test, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, NUM_WORKERS, MAX_H, args...>;
-template<typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_H=8, int MAX_W=8, typename... args> using g2r_sweep_size_2d_warp = g2r_sweep_size_2d<test, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, 1, args...>;
+template<typename test, int MAX_H=8, int MAX_W=8, int NUM_WORKERS=1, typename... args> using g2r_sweep_size_2d = loop_h<g2r_wrapper_2d, test, MAX_H, MAX_W, NUM_WORKERS, MAX_H, args...>;
+template<typename test, int MAX_H=8, int MAX_W=8, typename... args> using g2r_sweep_size_2d_warp = g2r_sweep_size_2d<test, MAX_H, MAX_W, 1, args...>;
 
 template<typename T, typename RT = kittens::bf16>
 struct load_store {
     using dtype = T;
-    template<typename RT_SHAPE, typename ST_SHAPE, int H, int W, int NW, kittens::ducks::rt_layout::all L> using valid = std::bool_constant<NW == 1 && W*H<=64>; // this is warp-level
+    using rt_dtype = RT;
+    template<int H, int W, int NW, kittens::ducks::rt_layout::all L, typename... args> using valid = std::bool_constant<NW == 1 && W*H<=64>; // this is warp-level
     static inline const std::string test_identifier = std::is_same_v<T, kittens::bf16> ? "reg_loadstore_gmem=bf16" :
                                                       std::is_same_v<T, kittens::half> ? "reg_loadstore_gmem=half" :
-                                                      std::is_same_v<T, kittens::fp8e4m3> ? "reg_loadstore_gmem=fp8e4m3" :
                                                                                          "reg_loadstore_gmem=float";
-    template<typename RT_SHAPE, typename ST_SHAPE, int H, int W, int NW, kittens::ducks::gl::all GL, kittens::ducks::rt_layout::all L> __host__ static void host_func(const std::vector<float> &i_ref, std::vector<float> &o_ref) {
+    template<int H, int W, int NW, kittens::ducks::gl::all GL, kittens::ducks::rt_layout::all L, typename... args> __host__ static void host_func(const std::vector<float> &i_ref, std::vector<float> &o_ref) {
         o_ref = i_ref; // overwrite the whole thing
     }
-    template<typename RT_SHAPE, typename ST_SHAPE, int H, int W, int NW, kittens::ducks::gl::all GL, kittens::ducks::rt_layout::all L> __device__ static void device_func(const GL input, const GL output) {
-        kittens::rt<dtype,RT_SHAPE::rows*H, RT_SHAPE::cols*W, L> reg_tile;
+    template<int H, int W, int NW, kittens::ducks::gl::all GL, kittens::ducks::rt_layout::all L> __device__ static void device_func(const GL input, const GL output) {
+        constexpr int rt_height = kittens::TILE_ROW_DIM<rt_dtype>;
+        constexpr int rt_width = kittens::TILE_COL_DIM<rt_dtype>;
+        using RT_T = kittens::rt_bf<rt_height*H, rt_width*W, L>;
+        RT_T reg_tile;
         for(int i = 0; i < input.batch(); i++) for(int j = 0; j < input.depth(); j++) for(int k = 0; k < input.rows()/reg_tile.rows; k++) for(int l = 0; l < input.cols()/reg_tile.cols; l++) {
             kittens::load(reg_tile, input, {i, j, k, l});
             kittens::store(output, reg_tile, {i, j, k, l});
@@ -74,70 +78,11 @@ void warp::memory::tile::global_to_register::tests(test_data &results) {
                          INTENSITY_2 ? 4  : 
                          INTENSITY_3 ? 8  :
                          INTENSITY_4 ? 16 : -1;
-                         
-    using DEFAULT_ST_SHAPE = kittens::ducks::st_shape::st_16x16;
-    // TODO: fp8e4m3
-    using RT_SHAPE_1 = kittens::ducks::rt_shape::rt_16x32;
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_1, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_1, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_1, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_1, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_1, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_1, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
 
-
-    using RT_SHAPE_2 = kittens::ducks::rt_shape::rt_32x16;
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_2, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_2, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_2, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_2, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_2, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_2, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-
-
-    using RT_SHAPE_3 = kittens::ducks::rt_shape::rt_16x16;
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_3, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_3, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_3, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_3, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_3, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_3, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-
-
-    using RT_SHAPE_4 = kittens::ducks::rt_shape::rt_32x32;
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_4, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_4, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_4, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_4, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_4, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_4, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-
-
-    using RT_SHAPE_5 = kittens::ducks::rt_shape::rt_32x32_8;
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_5, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_5, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_5, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_5, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_5, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_5, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-
-
-    using RT_SHAPE_6 = kittens::ducks::rt_shape::rt_16x32_4;
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_6, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_6, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_6, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_6, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_6, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_6, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-
-
-    using RT_SHAPE_7 = kittens::ducks::rt_shape::rt_32x16_4;
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_7, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<float>, RT_SHAPE_7, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_7, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, RT_SHAPE_7, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_7, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
-    g2r_sweep_size_2d_warp<load_store<kittens::half>, RT_SHAPE_7, DEFAULT_ST_SHAPE, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
+    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
+    g2r_sweep_size_2d_warp<load_store<kittens::bf16>, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
+    g2r_sweep_size_2d_warp<load_store<kittens::half>, SIZE, SIZE, kittens::ducks::rt_layout::row>::run(results);
+    g2r_sweep_size_2d_warp<load_store<kittens::half>, SIZE, SIZE, kittens::ducks::rt_layout::col>::run(results);
 }
 
 #endif

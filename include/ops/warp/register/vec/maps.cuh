@@ -30,6 +30,52 @@ __device__ static inline void unary_op(T &dst, const T &src) {
         }
     }
 }
+
+
+/**
+ * @brief Apply a unary op to a flattened subrange [start, end) of a 2D vector.
+ */
+ template<typename op, ducks::rv::all T>
+ __device__ static inline void unary_op_range(T &dst, const T &src, int start, int end) {
+     const int O = dst.outer_dim;
+     const int I = dst.inner_dim;
+     // flat index over O*I; map back to (i,j)
+     #pragma unroll
+     for (int n = start; n < end; ++n) {
+         const int i = n / I;
+         const int j = n - i * I;
+         dst[i][j] = op::template op<typename T::dtype>(src[i][j]);
+     }
+ }
+ 
+ /** first half */
+ template<typename op, ducks::rv::all T>
+ __device__ static inline void unary_op_first_half_vec(T &dst, const T &src) {
+     const int N = dst.outer_dim * dst.inner_dim;
+     unary_op_range<op, T>(dst, src, 0, N >> 1);
+ }
+ 
+ /** second half */
+ template<typename op, ducks::rv::all T>
+ __device__ static inline void unary_op_second_half_vec(T &dst, const T &src) {
+     const int N = dst.outer_dim * dst.inner_dim;
+     unary_op_range<op, T>(dst, src, N >> 1, N);
+ }
+ 
+ // --- exp shortcuts ---
+ template<ducks::rv::all T>
+ __device__ static inline void exp_first_half_vec(T &dst, const T &src) {
+     unary_op_first_half_vec<base_ops::exp2, T>(dst, src);
+ }
+ template<ducks::rv::all T>
+ __device__ static inline void exp_second_half_vec(T &dst, const T &src) {
+     unary_op_second_half_vec<base_ops::exp2, T>(dst, src);
+ }
+ 
+
+
+
+
 /**
  * @brief Perform a binary operation on two vectors.
  *
@@ -104,8 +150,8 @@ __device__ static inline void zero(T &dst) {
  * @param dst[out] Destination vector to be set to one.
  */
 template<ducks::rv::all T>
-__device__ static inline void ones(T &dst) {
-    unary_op<base_ops::ones, T>(dst, dst);
+__device__ static inline void one(T &dst) {
+    unary_op<base_ops::one, T>(dst, dst);
 }
 /**
  * @brief Sets all elements of a register vector to positive infinity.

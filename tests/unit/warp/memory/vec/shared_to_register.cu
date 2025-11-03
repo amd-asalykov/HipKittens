@@ -2,11 +2,7 @@
 
 #ifdef TEST_WARP_MEMORY_VEC_SHARED_TO_REGISTER
 
-#ifdef KITTENS_CDNA4
-#define LENGTH 32
-#else
 #define LENGTH 16
-#endif
 
 template<typename T>
 struct vec_load_store {
@@ -50,10 +46,6 @@ void warp::memory::vec::shared_to_register::tests(test_data &results) {
     sweep_gmem_type_1d_warp<vec_load_store, SIZE, kittens::ducks::rv_layout::naive>::run(results);
     sweep_gmem_type_1d_warp<vec_load_store, SIZE, kittens::ducks::rv_layout::ortho>::run(results);
     sweep_gmem_type_1d_warp<vec_load_store, SIZE, kittens::ducks::rv_layout::align>::run(results);
-
-    #ifdef KITTENS_CDNA4
-    sweep_gmem_type_1d_warp<vec_load_store, SIZE, kittens::ducks::rv_layout::accum_align>::run(results);
-    #endif
 }
 
 #endif

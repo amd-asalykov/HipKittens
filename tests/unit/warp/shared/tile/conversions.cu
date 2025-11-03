@@ -22,7 +22,13 @@ struct test_swap_layout {
         kittens::st<dtype, 16*H, 16*W> &t1 = al.allocate<kittens::st<dtype, 16*H, 16*W>>();
         kittens::st<dtype, 16*H, 16*W> &t2 = al.allocate<kittens::st<dtype, 16*H, 16*W>>();
         kittens::load(t2, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::copy(t1, t2);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::store(output, t1, {});
     }
 };
@@ -50,16 +56,31 @@ struct test_subtile {
         kittens::shared_allocator al((int*)&__shm[0]); 
         kittens::st<dtype, 16*H, 16*W> &t = al.allocate<kittens::st<dtype, 16*H, 16*W>>();
         kittens::load(t, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();   
         for(int i = 0; i < H/ST_H; i++) {
             for(int j = 0; j < W/ST_W; j++) {
                 auto ref = kittens::subtile_inplace<16*ST_H, 16*ST_W>(t, {i, j});
+                __builtin_amdgcn_s_waitcnt(0);
+                __builtin_amdgcn_sched_barrier(0);
+                __builtin_amdgcn_s_barrier();
                 kittens::rt_fl<16*ST_H, 16*ST_W> reg;
                 kittens::load(reg, ref);
+                __builtin_amdgcn_s_waitcnt(0);
+                __builtin_amdgcn_sched_barrier(0);
+                __builtin_amdgcn_s_barrier();
                 kittens::mul(reg, reg, float(i));
                 kittens::add(reg, reg, float(j));
                 kittens::store(ref, reg);
+                __builtin_amdgcn_s_waitcnt(0);
+                __builtin_amdgcn_sched_barrier(0);
+                __builtin_amdgcn_s_barrier();
             }
         }
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::store(output, t, {});
     }
 };
@@ -68,8 +89,8 @@ void warp::shared::tile::conversions::tests(test_data &results) {
     std::cout << "\n ----- Starting ops/warp/shared/conversions tests! -----\n" << std::endl;
     constexpr int SIZE = INTENSITY_1 ? 2  :
                          INTENSITY_2 ? 4  : 
-                         INTENSITY_3 ? 6  :
-                         INTENSITY_4 ? 8 : -1;
+                         INTENSITY_3 ? 5  : // max 65 KB shared memory on CDNA3
+                         INTENSITY_4 ? 5 : -1; // max 65 KB shared memory on CDNA3
 
     sweep_gmem_type_2d_warp<test_swap_layout, SIZE, SIZE>::run(results);
                          

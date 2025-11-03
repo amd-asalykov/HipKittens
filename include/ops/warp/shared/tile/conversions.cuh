@@ -24,16 +24,14 @@ namespace kittens {
  * @param[out] dst The destination tile.
  * @param[in] src The source tile.
  */
-
-// TODO: Implement this
-// template<typename T, typename U, int _height, int _width, ducks::st_shape::all _shape>
-// __device__ static inline void copy(st<T, _height, _width, _shape> &dst, const st<U, _height, _width, _shape> &src) {
-//     #pragma unroll
-//     for(int i = laneid(); i < dst.num_elements; i+=kittens::WARP_THREADS) {
-//         const int row = i/dst.cols, col = i%dst.cols;
-//         dst[{row, col}] = base_types::convertor<T, U>::convert(src[{row, col}]);
-//     }
-// }
+template<typename T, typename U, int _height, int _width>
+__device__ static inline void copy(st<T, _height, _width> &dst, const st<U, _height, _width> &src) {
+    #pragma unroll
+    for(int i = laneid(); i < dst.num_elements; i+=kittens::WARP_THREADS) {
+        int row = i/dst.cols, col = i%dst.cols;
+        dst[{row, col}] = base_types::convertor<T, U>::convert(src[{row, col}]);
+    }
+}
 
 /* ----------  SUBTILE  ---------- */
 
@@ -51,11 +49,13 @@ namespace kittens {
 * @note The subtile {height, width} must evenly divide the tile {height, width}.
 */
 template<int subtile_rows, int subtile_cols, ducks::st::all ST>
-__device__ inline st_subtile<ST, subtile_rows, subtile_cols> subtile_inplace(ST &src, int2 rowcol) {
+__device__ inline st_subtile<ST, subtile_rows, subtile_cols> subtile_inplace(ST &src, int2 rowcol, bool unformatted = false) {
     using T = typename ST::dtype;
-    static_assert(ST::rows % subtile_rows == 0);
-    static_assert(ST::cols % subtile_cols == 0);
-    static_assert(ST::rows == ST::underlying_rows && ST::cols == ST::underlying_cols); // must be a real ST, no recursive subtiles.
+    static_assert(subtile_rows % TILE_ROW_DIM<T> == 0);
+    static_assert(subtile_cols % TILE_COL_DIM<T> == 0);
+    static_assert(ST::height % (subtile_rows/TILE_ROW_DIM<T>) == 0);
+    static_assert(ST::width % (subtile_cols/TILE_COL_DIM<T>) == 0);
+    static_assert(ST::height == ST::underlying_height && ST::width == ST::underlying_width); // must be a real ST, no recursive subtiles.
     return st_subtile<ST, subtile_rows, subtile_cols>(src, rowcol);
 }
 

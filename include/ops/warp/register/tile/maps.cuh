@@ -27,7 +27,7 @@ __device__ static inline void unary_map(T &dst, const T &src) {
         #pragma unroll
         for(int j = 0; j < dst.width; j++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
+            for(int k = 0; k < dst.packed_per_tile; k++) {
                 dst.tiles[i][j].data[k] = op::template op<typename T::dtype>(src.tiles[i][j].data[k]);
             }
         }
@@ -50,7 +50,7 @@ __device__ static inline void bin_map(T &dst, const T &src, const typename T::dt
         #pragma unroll
         for(int j = 0; j < dst.width; j++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
+            for(int k = 0; k < dst.packed_per_tile; k++) {
                 dst.tiles[i][j].data[k] = op::template op<typename T::dtype>(src.tiles[i][j].data[k], param);
             }
         }
@@ -86,7 +86,7 @@ __device__ static inline void bin_map(T &dst, const T &lhs, const T &rhs) {
         #pragma unroll
         for(int j = 0; j < dst.width; j++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
+            for(int k = 0; k < dst.packed_per_tile; k++) {
                 dst.tiles[i][j].data[k] = op::template op<typename T::dtype>(lhs.tiles[i][j].data[k], rhs.tiles[i][j].data[k]);
             }
         }
@@ -112,18 +112,19 @@ __device__ static inline void row_map(T &dst, const T &src, const V &row_values)
     using RT = V::dtype;
     using RT2 = base_types::packing<RT>::packed_type;
 
-    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout, typename T::shape>::col_vec_layout>); // compatible layout
+    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout>::col_vec_layout>); // compatible layout
     static_assert(std::is_same_v<RT2, typename T::dtype>); // compatible type
     static_assert(V::outer_dim == T::height); // compatible size
     
     #pragma unroll
     for(int i = 0; i < dst.height; i++) {
-        RT2 packed_val = base_types::packing<RT>::pack(row_values[i][0]); //  first value in eager mode
+        RT packed_val = row_values[i][0]; //  first value in eager mode
+        RT2 packed_val2 = {packed_val, packed_val};
         #pragma unroll
         for(int j = 0; j < dst.width; j++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
-                dst.tiles[i][j].data[k] = op::template op<dtype>(src.tiles[i][j].data[k], packed_val);
+            for(int k = 0; k < dst.packed_per_tile; k++) {
+                dst.tiles[i][j].data[k] = op::template op<dtype>(src.tiles[i][j].data[k], packed_val2);
             }
         }
     }
@@ -141,7 +142,7 @@ __device__ static inline void row_map(T &dst, const T &src, const V &row_values)
 template<typename op, ducks::rt::col_layout T, ducks::rv::all V>
 __device__ static inline void row_map(T &dst, const T &src, const V &row_values) {
 
-    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout, typename T::shape>::col_vec_layout>); // compatible layout
+    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout>::col_vec_layout>); // compatible layout
     static_assert(std::is_same_v<typename V::dtype, typename T::dtype>); // compatible type
     static_assert(V::outer_dim == T::height); // compatible size
 
@@ -152,7 +153,7 @@ __device__ static inline void row_map(T &dst, const T &src, const V &row_values)
         #pragma unroll
         for(int j = 0; j < dst.width; j++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
+            for(int k = 0; k < dst.packed_per_tile; k++) {
                 dst.tiles[i][j].data[k] = op::template op<dtype>(src.tiles[i][j].data[k], row_values[i][k]);
             }
         }
@@ -179,7 +180,7 @@ __device__ static inline void row_map(T &dst, const T &a, const T &b, const V &r
     using RT = V::dtype;
     using RT2 = base_types::packing<RT>::packed_type;
 
-    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout, typename T::shape>::col_vec_layout>); // compatible layout
+    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout>::col_vec_layout>); // compatible layout
     static_assert(std::is_same_v<RT2, typename T::dtype>); // compatible type
     static_assert(V::outer_dim == T::height); // compatible size
 
@@ -189,7 +190,7 @@ __device__ static inline void row_map(T &dst, const T &a, const T &b, const V &r
         #pragma unroll
         for(int j = 0; j < dst.width; j++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
+            for(int k = 0; k < dst.packed_per_tile; k++) {
                 dst.tiles[i][j].data[k] = op::template op<dtype>(a.tiles[i][j].data[k], b.tiles[i][j].data[k], packed_val);
             }
         }
@@ -209,7 +210,7 @@ __device__ static inline void row_map(T &dst, const T &a, const T &b, const V &r
 template<typename op, ducks::rt::col_layout T, ducks::rv::all V>
 __device__ static inline void row_map(T &dst, const T &a, const T &b, const V &row_values) {
 
-    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout, typename T::shape>::col_vec_layout>); // compatible layout
+    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout>::col_vec_layout>); // compatible layout
     static_assert(std::is_same_v<typename V::dtype, typename T::dtype>); // compatible type
     static_assert(V::outer_dim == T::height); // compatible size
 
@@ -220,7 +221,7 @@ __device__ static inline void row_map(T &dst, const T &a, const T &b, const V &r
         #pragma unroll
         for(int j = 0; j < dst.width; j++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
+            for(int k = 0; k < dst.packed_per_tile; k++) {
                 dst.tiles[i][j].data[k] = op::template op<dtype>(a.tiles[i][j].data[k], b.tiles[i][j].data[k], row_values[i][k]);
             }
         }
@@ -242,7 +243,7 @@ __device__ static inline void row_map(T &dst, const T &a, const T &b, const V &r
 template<typename op, ducks::rt::row_layout T, ducks::rv::all V>
 __device__ static inline void col_map(T &dst, const T &src, const V &col_values) {
 
-    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout, typename T::shape>::row_vec_layout>); // compatible layout
+    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout>::row_vec_layout>); // compatible layout
     static_assert(std::is_same_v<typename V::dtype, typename T::dtype>); // compatible type
     static_assert(V::outer_dim == T::width); // compatible size
 
@@ -253,7 +254,7 @@ __device__ static inline void col_map(T &dst, const T &src, const V &col_values)
         #pragma unroll
         for(int i = 0; i < dst.height; i++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
+            for(int k = 0; k < dst.packed_per_tile; k++) {
                 dst.tiles[i][j].data[k] = op::template op<dtype>(src.tiles[i][j].data[k], col_values[j][k]);
             }
         }
@@ -276,18 +277,19 @@ __device__ static inline void col_map(T &dst, const T &src, const V &col_values)
     using RT = V::dtype;
     using RT2 = base_types::packing<RT>::packed_type;
 
-    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout, typename T::shape>::row_vec_layout>); // compatible layout
+    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout>::row_vec_layout>); // compatible layout
     static_assert(std::is_same_v<RT2, typename T::dtype>); // compatible type
     static_assert(V::outer_dim == T::width); // compatible size
 
     #pragma unroll
     for(int j = 0; j < dst.width; j++) {
-        dtype packed_val = base_types::packing<dtype>::pack(col_values[j][0]); //  first value in eager mode
+        RT packed_val = col_values[j][0]; //  first value in eager mode
+        RT2 packed_val2 = {packed_val, packed_val};
         #pragma unroll
         for(int i = 0; i < dst.height; i++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
-                dst.tiles[i][j].data[k] = op::template op<dtype>(src.tiles[i][j].data[k], packed_val);
+            for(int k = 0; k < dst.packed_per_tile; k++) {
+                dst.tiles[i][j].data[k] = op::template op<dtype>(src.tiles[i][j].data[k], packed_val2);
             }
         }
     }
@@ -308,7 +310,7 @@ __device__ static inline void col_map(T &dst, const T &src, const V &col_values)
 template<typename op, ducks::rt::row_layout T, ducks::rv::all V>
 __device__ static inline void col_map(T &dst, const T &a, const T &b, const V &col_values) {
 
-    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout, typename T::shape>::row_vec_layout>); // compatible layout
+    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout>::row_vec_layout>); // compatible layout
     static_assert(std::is_same_v<typename V::dtype, typename T::dtype>); // compatible type
     static_assert(V::outer_dim == T::width); // compatible size
 
@@ -319,7 +321,7 @@ __device__ static inline void col_map(T &dst, const T &a, const T &b, const V &c
         #pragma unroll
         for(int i = 0; i < dst.height; i++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
+            for(int k = 0; k < dst.packed_per_tile; k++) {
                 dst.tiles[i][j].data[k] = op::template op<dtype>(a.tiles[i][j].data[k], b.tiles[i][j].data[k], col_values[j][k]);
             }
         }
@@ -343,7 +345,7 @@ __device__ static inline void col_map(T &dst, const T &a, const T &b, const V &c
     using RT = V::dtype;
     using RT2 = base_types::packing<RT>::packed_type;
 
-    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout, typename T::shape>::row_vec_layout>); // compatible layout
+    static_assert(std::is_same_v<typename V::layout, typename rt_base<typename T::T, typename T::layout>::row_vec_layout>); // compatible layout
     static_assert(std::is_same_v<RT2, typename T::dtype>); // compatible type
     static_assert(V::outer_dim == T::width); // compatible size
 
@@ -353,7 +355,7 @@ __device__ static inline void col_map(T &dst, const T &a, const T &b, const V &c
         #pragma unroll
         for(int i = 0; i < dst.height; i++) {
             #pragma unroll
-            for(int k = 0; k < dst.packed_per_base_tile; k++) {
+            for(int k = 0; k < dst.packed_per_tile; k++) {
                 dst.tiles[i][j].data[k] = op::template op<dtype>(a.tiles[i][j].data[k], b.tiles[i][j].data[k], packed_val);
             }
         }
@@ -376,14 +378,14 @@ __device__ static inline void zero(T &dst) {
     unary_map<base_ops::zero, T>(dst, dst);
 }
 /**
- * @brief Sets all elements of a tile to ones.
+ * @brief Sets all elements of a tile to one.
  *
  * @tparam T Tile type.
  * @param dst[out] Destination tile where the result is stored.
  */
 template<ducks::rt::all T>
-__device__ static inline void ones(T &dst) {
-    unary_map<base_ops::ones, T>(dst, dst);
+__device__ static inline void one(T &dst) {
+    unary_map<base_ops::one, T>(dst, dst);
 }
 /**
  * @brief Sets all elements of a tile to positive infinity.
@@ -588,41 +590,7 @@ __device__ static inline void add_row(T &dst, const T &src, const V &row_values)
  */
 template<ducks::rt::all T, ducks::rv::all V>
 __device__ static inline void sub_row(T &dst, const T &src, const V &row_values) {
-
-    if constexpr (std::is_same_v<typename V::shape, rt_16x16_s>) {
-        #pragma unroll
-        for(int i = 0; i < dst.height; i++) {
-            #pragma unroll
-            for(int j = 0; j < dst.width; j++) {
-                asm volatile(
-                    "v_subrev_f32_dpp %0, %1, %2 quad_perm:[0,0,0,0] row_mask:0xf bank_mask:0xf"
-                    : "=v"(dst.tiles[i][j].data[0].x)
-                    : "v"(row_values[i][0]), "v"(src.tiles[i][j].data[0].x)
-                    : "memory"
-                );
-                asm volatile(
-                    "v_subrev_f32_dpp %0, %1, %2 quad_perm:[1,1,1,1] row_mask:0xf bank_mask:0xf"
-                    : "=v"(dst.tiles[i][j].data[0].y)
-                    : "v"(row_values[i][0]), "v"(src.tiles[i][j].data[0].y)
-                    : "memory"
-                );
-                asm volatile(
-                    "v_subrev_f32_dpp %0, %1, %2 quad_perm:[2,2,2,2] row_mask:0xf bank_mask:0xf"
-                    : "=v"(dst.tiles[i][j].data[1].x)
-                    : "v"(row_values[i][0]), "v"(src.tiles[i][j].data[1].x)
-                    : "memory"
-                );
-                asm volatile(
-                    "v_subrev_f32_dpp %0, %1, %2 quad_perm:[3,3,3,3] row_mask:0xf bank_mask:0xf"
-                    : "=v"(dst.tiles[i][j].data[1].y)
-                    : "v"(row_values[i][0]), "v"(src.tiles[i][j].data[1].y)
-                    : "memory"
-                );
-            }
-        }
-    } else {
-        row_map<base_ops::sub, T, V>(dst, src, row_values);
-    }
+    row_map<base_ops::sub, T, V>(dst, src, row_values);
 }
 /**
  * @brief Multiplies each row of a tile by row values.

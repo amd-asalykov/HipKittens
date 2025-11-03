@@ -21,10 +21,10 @@ struct g2s_wrapper_2d {
             std::vector<float> o_ref(SIZE);
             initialize(&d_i, &d_o, i_ref, o_ref);
             // make descriptors
-            using GL = typename kittens::gl<dtype, -1, -1, -1, 16*C*W>;
+            using GL = typename kittens::gl<dtype, -1, -1, -1, kittens::TILE_COL_DIM<dtype>*C*W>;
             static_assert(axis::value==0 || axis::value==1 || axis::value==2, "Axis must be 0, 1, or 2.");
-            GL input  (d_i, (axis::value==0?H*16:1)*B, (axis::value==1?H*16:1)*D, (axis::value==2?H*16:1)*R, nullptr);
-            GL output (d_o, (axis::value==0?H*16:1)*B, (axis::value==1?H*16:1)*D, (axis::value==2?H*16:1)*R, nullptr);
+            GL input  (d_i, (axis::value==0?H*kittens::TILE_ROW_DIM<dtype>:1)*B, (axis::value==1?H*kittens::TILE_ROW_DIM<dtype>:1)*D, (axis::value==2?H*kittens::TILE_ROW_DIM<dtype>:1)*R, nullptr);
+            GL output (d_o, (axis::value==0?H*kittens::TILE_ROW_DIM<dtype>:1)*B, (axis::value==1?H*kittens::TILE_ROW_DIM<dtype>:1)*D, (axis::value==2?H*kittens::TILE_ROW_DIM<dtype>:1)*R, nullptr);
             // run kernel
             hipFuncSetAttribute(
                 reinterpret_cast<const void*>(global_wrapper_2d<test, dtype, H, W, NUM_WORKERS, GL, axis, args...>),
@@ -35,7 +35,7 @@ struct g2s_wrapper_2d {
             // fill in correct results on cpu
             test::template host_func<H, W, NUM_WORKERS, GL, axis, args...>(i_ref, o_ref);
             // check and cleanup
-            this_result.result = validate(d_i, d_o, i_ref, o_ref, this_result.label, W*16);
+            this_result.result = validate(d_i, d_o, i_ref, o_ref, this_result.label, W*kittens::TILE_COL_DIM<dtype>);
         }
         else {
             this_result.result = test_result::INVALID;
@@ -47,7 +47,7 @@ template<typename test, int MAX_H=8, int MAX_W=8, int NUM_WORKERS=1, typename...
 template<template<typename> typename test, int MAX_H=8, int MAX_W=8, int NUM_WORKERS=1, typename... args>
 struct g2s_sweep_gmem_type_2d {
     static void run(test_data &results) {
-        g2s_sweep_size_2d<test<float>, MAX_H, MAX_W, NUM_WORKERS, args...>::run(results);
+        // g2s_sweep_size_2d<test<float>, MAX_H, MAX_W, NUM_WORKERS, args...>::run(results); // float not supported in global_to_shared ops
         g2s_sweep_size_2d<test<kittens::bf16>, MAX_H, MAX_W, NUM_WORKERS, args...>::run(results);
         g2s_sweep_size_2d<test<kittens::half>, MAX_H, MAX_W, NUM_WORKERS, args...>::run(results);
     }
@@ -69,15 +69,15 @@ struct group_shared_load_store {
         using G = kittens::group<NW>;
         extern __shared__ kittens::alignment_dummy __shm[]; // this is the CUDA shared memory
         kittens::shared_allocator<16> al((int*)&__shm[0]);
-        using ST = kittens::st<dtype, 16*H, 16*W>;
+        using ST = kittens::st<dtype, kittens::TILE_ROW_DIM<dtype>*H, kittens::TILE_COL_DIM<dtype>*W>;
         ST &shared_tile = al.allocate<ST>();
-        int num_batches = axis::value==0?((int)input.batch/shared_tile.rows):(int)input.batch;
-        int num_depths = axis::value==1?((int)input.depth/shared_tile.rows):(int)input.depth;
-        int num_rows = axis::value==2?((int)input.rows/shared_tile.rows):(int)input.rows;
+        int num_batches = axis::value==0?((int)input.batch()/shared_tile.rows):(int)input.batch();
+        int num_depths = axis::value==1?((int)input.depth()/shared_tile.rows):(int)input.depth();
+        int num_rows = axis::value==2?((int)input.rows()/shared_tile.rows):(int)input.rows();
         for(int i = 0; i < num_batches; i++)
             for(int j = 0; j < num_depths; j++)
                 for(int k = 0; k < num_rows; k++)
-                    for(int l = 0; l < (input.cols/shared_tile.cols); l++) {
+                    for(int l = 0; l < (input.cols()/shared_tile.cols); l++) {
             G::template load <axis::value, false, ST, GL>(shared_tile, input,  {i, j, k, l});
             G::template store<axis::value, false, ST, GL>(output, shared_tile, {i, j, k, l});
         }
@@ -89,6 +89,7 @@ using I1_t = std::integral_constant<int, 1>;
 using I2_t = std::integral_constant<int, 2>;
 void group::memory::tile::global_to_shared::tests(test_data &results) {
     std::cout << "\n ----- Starting ops/group/memory/tile/global_to_shared tests! -----\n" << std::endl;
+    // NOTE: size > 2 does not work with bf16/half seemingly because of OOM
     constexpr int SIZE = INTENSITY_1 ? 2  :
                          INTENSITY_2 ? 4  : 
                          INTENSITY_3 ? 8  :

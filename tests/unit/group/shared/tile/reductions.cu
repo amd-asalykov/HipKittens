@@ -26,11 +26,17 @@ struct group_normalize_row {
         kittens::st_bf<16*H, 16*W> &shared_tile = al.allocate<kittens::st_bf<16*H, 16*W>>();
         __shared__ kittens::col_vec<typeof(shared_tile)> accum;
         G::load(shared_tile, input, {});
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::row_sum(accum, shared_tile);
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);  
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::div_row(shared_tile, shared_tile, accum);
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::store(output, shared_tile, {});
     }
 };
@@ -58,11 +64,17 @@ struct group_normalize_col {
         kittens::st_bf<16*H, 16*W> &shared_tile = al.allocate<kittens::st_bf<16*H, 16*W>>();
         __shared__ kittens::row_vec<typeof(shared_tile)> accum;
         G::load(shared_tile, input, {});
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::col_sum(accum, shared_tile);
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::div_col(shared_tile, shared_tile, accum);
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::store(output, shared_tile, {});
     }
 };
@@ -90,11 +102,17 @@ struct group_broadcast_row {
         kittens::st_bf<16*H, 16*W> &shared_tile = al.allocate<kittens::st_bf<16*H, 16*W>>();
         __shared__ kittens::col_vec<typeof(shared_tile)> accum;
         G::load(shared_tile, input, {});
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::row_sum(accum, shared_tile);
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::broadcast_row(shared_tile, accum);
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::store(output, shared_tile, {});
     }
 };
@@ -122,11 +140,17 @@ struct group_broadcast_col {
         kittens::st_bf<16*H, 16*W> &shared_tile = al.allocate<kittens::st_bf<16*H, 16*W>>();
         __shared__ kittens::row_vec<typeof(shared_tile)> accum;
         G::load(shared_tile, input, {});
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::col_sum(accum, shared_tile);
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::broadcast_col(shared_tile, accum);
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::store(output, shared_tile, {});
     }
 };
@@ -135,8 +159,8 @@ void group::shared::tile::reductions::tests(test_data &results) {
     std::cout << "\n ----- Starting ops/group/shared/tile/reductions tests! -----\n" << std::endl;
     constexpr int SIZE = INTENSITY_1 ? 2  :
                          INTENSITY_2 ? 4  : 
-                         INTENSITY_3 ? 8  :
-                         INTENSITY_4 ? 16 : -1;
+                         INTENSITY_3 ? 7  : // CDNA3 has 65KB shared memory
+                         INTENSITY_4 ? 7 : -1; // CDNA3 has 65KB shared memory
 
     sweep_size_2d<group_normalize_row, SIZE, SIZE, 2>::run(results);
     sweep_size_2d<group_normalize_col, SIZE, SIZE, 2>::run(results);

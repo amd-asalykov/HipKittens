@@ -20,19 +20,19 @@ HIPFLAGS=-std=c++20 -I$(HIP_INCLUDE_DIR) -Itesting_commons -I../../include -Wall
 # (Default) Level 2 takes a minute to compile 3,000 tests.
 # Level 3 takes 5 minutes to compile 10,000 tests.
 # Level 4 takes 15 while to compile 25,000 tests
-HIPFLAGS+= -DTEST_INTENSITY=2
+HIPFLAGS+= -DTEST_INTENSITY=3
 # Which tests to run?
 # -DTEST_ALL means run all tests.
 # You can also specify subsections, e.g. -DTEST_WARP_MEMORY
 # Or individual tests, like -DTEST_WARP_MEMORY_VEC_DSMEM. Useful for debugging!
-HIPFLAGS+= -DTEST_WARP_MEMORY_TILE_SHARED_TO_REGISTER
+HIPFLAGS+= -DTEST_ALL
 
 ifeq ($(COMP_LEVEL),safe)
 HIPFLAGS+= -O0
 else ifeq ($(COMP_LEVEL),debug)
 HIPFLAGS+= -g
 else ifeq ($(COMP_LEVEL),profile)
-HIPFLAGS+= -O3 -save-temps=obj
+HIPFLAGS+= -O3 -save-temps=obj -Rpass-analysis=kernel-resource-usage
 endif
 
 # Compiler flags based on GPU target
@@ -41,9 +41,8 @@ HIPFLAGS+= -DKITTENS_CDNA2 --offload-arch=gfx90a
 else ifeq ($(GPU_TARGET),CDNA3)
 HIPFLAGS+= -DKITTENS_CDNA3 --offload-arch=gfx942
 else ifeq ($(GPU_TARGET),CDNA4)
-HIPFLAGS+= --offload-arch=gfx950 -DHIP_ENABLE_WARP_SYNC_BUILTINS
+HIPFLAGS+= -DKITTENS_CDNA3 --offload-arch=gfx950 -DHIP_ENABLE_WARP_SYNC_BUILTINS
 endif
-# -DKITTENS_CDNA4 
 
 # Suppress warnings
 HIPFLAGS+= -w

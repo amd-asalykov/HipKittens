@@ -18,6 +18,9 @@ struct vec_load_store {
         kittens::shared_allocator<16> al((int*)&__shm[0]); 
         kittens::col_vec<kittens::st<dtype, 16*S, 16*S>> &shared_vec = al.allocate<kittens::col_vec<kittens::st<dtype, 16*S, 16*S>>>();
         G::load(shared_vec, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::store(output, shared_vec, {});
     }
 };
@@ -27,8 +30,8 @@ void group::memory::vec::global_to_shared::tests(test_data &results) {
     std::cout << "\n ----- Starting ops/group/memory/vec/global_to_shared tests! -----\n" << std::endl;
     constexpr int SIZE = INTENSITY_1 ? 2  :
                          INTENSITY_2 ? 4  : 
-                         INTENSITY_3 ? 8  :
-                         INTENSITY_4 ? 16 : -1;
+                         INTENSITY_3 ? 7  : // CDNA3 has 65KB shared memory
+                         INTENSITY_4 ? 7 : -1; // CDNA3 has 65KB shared memory
                          
     sweep_size_1d<vec_load_store<float>, SIZE, 2>::run(results);
     sweep_size_1d<vec_load_store<float>, SIZE, 4>::run(results);

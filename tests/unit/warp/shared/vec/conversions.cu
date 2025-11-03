@@ -18,9 +18,13 @@ struct shared_vec_convert {
         __shared__ kittens::sv<dtype, 16*S> vec1;
         __shared__ kittens::sv<dtype, 16*S> vec2;
         kittens::load(vec1, input, {});
-        __syncwarp();
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::copy(vec2, vec1);
-        __syncwarp();
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::store(output, vec2, {});
     }
 };

@@ -19,15 +19,15 @@ namespace rv_layout {
 /**
  * @brief A dummy type used to identify an aligned (32x replicated) layout.
  */
-struct align {};
+struct align { constexpr static int inner_dim = 2; };
 /**
  * @brief A dummy type used to identify an orthogonal (2x replicated) layout.
  */
-struct ortho {};
+struct ortho { constexpr static int inner_dim = 1; };
 /**
  * @brief A dummy type used to identify an unreplicated layout, for better coalesced loads and vector operations like layernorm.
  */
-struct naive {};
+struct naive { constexpr static int inner_dim = 1; };
 
 /**
  * @brief A concept to check if a type is a register tile layout.

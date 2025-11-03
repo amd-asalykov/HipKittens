@@ -62,10 +62,16 @@ struct normalize_row {
         kittens::st<dtype, 16*H, 16*W> &shared_tile = al.allocate<kittens::st<dtype, 16*H, 16*W>>();
         __shared__ kittens::col_vec<typeof(shared_tile)> accum;
         kittens::load(shared_tile, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::row_sum(accum, shared_tile);
         kittens::abs(accum, accum);
         kittens::add(accum, accum, kittens::base_types::constants<dtype>::one());
         kittens::div_row(shared_tile, shared_tile, accum);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::store(output, shared_tile, {});
     }
 };
@@ -129,10 +135,16 @@ struct normalize_col {
         kittens::st<dtype, 16*H, 16*W> &shared_tile = al.allocate<kittens::st<dtype, 16*H, 16*W>>();
         __shared__ kittens::row_vec<typeof(shared_tile)> accum;
         kittens::load(shared_tile, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::col_sum(accum, shared_tile);
         kittens::abs(accum, accum);
         kittens::add(accum, accum, kittens::base_types::constants<dtype>::one());
         kittens::div_col(shared_tile, shared_tile, accum);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::store(output, shared_tile, {});
     }
 };
@@ -193,9 +205,15 @@ struct broadcast_row {
         kittens::st<dtype, 16*H, 16*W> &shared_tile = al.allocate<kittens::st<dtype, 16*H, 16*W>>();
         __shared__ kittens::col_vec<typeof(shared_tile)> accum;
         kittens::load(shared_tile, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::mul(shared_tile, shared_tile, kittens::base_types::convertor<dtype, float>::convert(0.125f));
         kittens::row_sum(accum, shared_tile);
         kittens::broadcast_row(shared_tile, accum);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::store(output, shared_tile, {});
     }
 };
@@ -257,9 +275,15 @@ struct broadcast_col {
         kittens::st<dtype, 16*H, 16*W> &shared_tile = al.allocate<kittens::st<dtype, 16*H, 16*W>>();
         __shared__ kittens::row_vec<typeof(shared_tile)> accum;
         kittens::load(shared_tile, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::mul(shared_tile, shared_tile, kittens::base_types::convertor<dtype, float>::convert(0.125f));
         kittens::col_sum(accum, shared_tile);
         kittens::broadcast_col(shared_tile, accum);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::store(output, shared_tile, {});
     }
 };
@@ -268,8 +292,8 @@ void warp::shared::tile::reductions::tests(test_data &results) {
     std::cout << "\n ----- Starting ops/warp/shared/tile/reductions tests! -----\n" << std::endl;
     constexpr int SIZE = INTENSITY_1 ? 2  :
                          INTENSITY_2 ? 4  : 
-                         INTENSITY_3 ? 8  :
-                         INTENSITY_4 ? 16 : -1;
+                         INTENSITY_3 ? 7  : // 7 is the max for CDNA3 (65 KB max shared memory)
+                         INTENSITY_4 ? 7 : -1; // 7 is the max for CDNA3 (65 KB max shared memory)
     sweep_gmem_type_2d_warp<normalize_row, SIZE, SIZE>::run(results);
     sweep_gmem_type_2d_warp<normalize_col, SIZE, SIZE>::run(results);
     sweep_gmem_type_2d_warp<broadcast_row, SIZE, SIZE>::run(results);

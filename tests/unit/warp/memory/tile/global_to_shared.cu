@@ -2,41 +2,43 @@
 
 #ifdef TEST_WARP_MEMORY_TILE_GLOBAL_TO_SHARED
 
-template<typename Ker, typename RT_SHAPE, typename ST_SHAPE, typename T, int H, int W, int NW, kittens::ducks::gl::all GL, typename... args>
+template<typename Ker, typename T, int H, int W, int NW, kittens::ducks::gl::all GL, typename... args>
 static __global__ void g2s_global_wrapper_2d(const GL input, const GL output) {
-    Ker::template device_func<RT_SHAPE, ST_SHAPE, T, H, W, NW, GL, args...>(input, output);
+    Ker::template device_func<H, W, NW, GL, args...>(input, output);
 }
-template<typename test, typename RT_SHAPE, typename ST_SHAPE, int H, int W, int NUM_WORKERS, typename axis, typename... args>
+template<typename test, int H, int W, int NUM_WORKERS, typename axis, typename... args>
 struct g2s_wrapper_2d {
     using dtype = gmem_dtype<test>; // defaults to bf16 in global memory if the test doesn't specify.
     using rt_dtype = test::rt_dtype;
     static void run(test_data& results) {
         test_info this_result;
-        this_result.label = generate_test_name<RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, args...>(test::test_identifier);
-        if constexpr (test::template valid<RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, axis, args...>::value) {
+        this_result.label = generate_test_name<H,W,NUM_WORKERS, axis, args...>(test::test_identifier);
+        if constexpr (test::template valid<H, W, NUM_WORKERS, axis, args...>::value) {
             constexpr int B = 3, D = 1, R = 4, C = 5;
-            constexpr int SIZE = H*W*B*D*R*C*ST_SHAPE::cols*ST_SHAPE::rows;
+            constexpr int rt_height = kittens::TILE_ROW_DIM<rt_dtype>;
+            constexpr int rt_width = kittens::TILE_COL_DIM<rt_dtype>;
+            constexpr int SIZE = H*W*B*D*R*C*rt_height*rt_width;
             // initialize
             dtype *d_i, *d_o;
             std::vector<float> i_ref(SIZE);
             std::vector<float> o_ref(SIZE);
             initialize(&d_i, &d_o, i_ref, o_ref);
             // make descriptors
-            using GL = typename kittens::gl<dtype, -1, -1, -1, ST_SHAPE::cols*C*W>;
+            using GL = typename kittens::gl<dtype, -1, -1, -1, rt_width*C*W>;
             static_assert(axis::value==0 || axis::value==1 || axis::value==2, "Axis must be 0, 1, or 2.");
-            GL input  (d_i, (axis::value==0?H*RT_SHAPE::rows:1)*B, (axis::value==1?H*RT_SHAPE::rows:1)*D, (axis::value==2?H*RT_SHAPE::rows:1)*R, nullptr);
-            GL output (d_o, (axis::value==0?H*RT_SHAPE::rows:1)*B, (axis::value==1?H*RT_SHAPE::rows:1)*D, (axis::value==2?H*RT_SHAPE::rows:1)*R, nullptr); 
+            GL input  (d_i, (axis::value==0?H*rt_height:1)*B, (axis::value==1?H*rt_height:1)*D, (axis::value==2?H*rt_height:1)*R, nullptr);
+            GL output (d_o, (axis::value==0?H*rt_height:1)*B, (axis::value==1?H*rt_height:1)*D, (axis::value==2?H*rt_height:1)*R, nullptr);
             // run kernel
             hipFuncSetAttribute(
-                reinterpret_cast<const void*>(global_wrapper_2d<test, RT_SHAPE, ST_SHAPE, dtype, H, W, NUM_WORKERS, GL, axis, args...>),
+                reinterpret_cast<const void*>(global_wrapper_2d<test, dtype, H, W, NUM_WORKERS, GL, axis, args...>),
                 hipFuncAttributeMaxDynamicSharedMemorySize,
                 kittens::MAX_SHARED_MEMORY
             );
-            global_wrapper_2d<test, RT_SHAPE, ST_SHAPE, dtype, H, W, NUM_WORKERS, GL, axis, args...><<<1, NUM_WORKERS*kittens::WARP_THREADS, kittens::MAX_SHARED_MEMORY>>>(input, output);
+            global_wrapper_2d<test, dtype, H, W, NUM_WORKERS, GL, axis, args...><<<1, NUM_WORKERS*kittens::WARP_THREADS, kittens::MAX_SHARED_MEMORY>>>(input, output);
             // fill in correct results on cpu
             test::template host_func<H, W, NUM_WORKERS, GL, axis, args...>(i_ref, o_ref);
             // check and cleanup
-            this_result.result = validate(d_i, d_o, i_ref, o_ref, this_result.label, W*ST_SHAPE::cols);
+            this_result.result = validate(d_i, d_o, i_ref, o_ref, this_result.label, W*rt_width);
         }
         else {
             this_result.result = test_result::INVALID;
@@ -44,36 +46,35 @@ struct g2s_wrapper_2d {
         results.push_back(this_result);
     }
 };
-template<typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_H=8, int MAX_W=8, int NUM_WORKERS=1, typename... args> using g2s_sweep_size_2d = loop_h<g2s_wrapper_2d, test, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, NUM_WORKERS, MAX_H, args...>;
-template<typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_H=8, int MAX_W=8, typename... args> using g2s_sweep_size_2d_warp = g2s_sweep_size_2d<test, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, 1, args...>;
-
-// template<template<typename> typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_H=8, int MAX_W=8, typename... args>
-// struct g2s_sweep_gmem_type_2d_warp {
-//     static void run(test_data &results) {
-//         g2s_sweep_size_2d_warp<test<float>, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, args...>::run(results);
-//         g2s_sweep_size_2d_warp<test<kittens::bf16>, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, args...>::run(results);
-//         g2s_sweep_size_2d_warp<test<kittens::half>, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, args...>::run(results);
-//     }
-// };
+template<typename test, int MAX_H=8, int MAX_W=8, int NUM_WORKERS=1, typename... args> using g2s_sweep_size_2d = loop_h<g2s_wrapper_2d, test, MAX_H, MAX_W, NUM_WORKERS, MAX_H, args...>;
+template<typename test, int MAX_H=8, int MAX_W=8, typename... args> using g2s_sweep_size_2d_warp = g2s_sweep_size_2d<test, MAX_H, MAX_W, 1, args...>;
+template<template<typename, typename = kittens::bf16> typename test, int MAX_H=8, int MAX_W=8, typename... args>
+struct g2s_sweep_gmem_type_2d_warp {
+    static void run(test_data &results) {
+        g2s_sweep_size_2d_warp<test<float>, MAX_H, MAX_W, args...>::run(results);
+        g2s_sweep_size_2d_warp<test<kittens::bf16>, MAX_H, MAX_W, args...>::run(results);
+        g2s_sweep_size_2d_warp<test<kittens::half>, MAX_H, MAX_W, args...>::run(results);
+    }
+};
 
 
 template<typename T, typename RT = kittens::bf16>
 struct st_load_store {
     using dtype = T;
-    template<typename RT_SHAPE, typename ST_SHAPE, int H, int W, int NW, typename axis> using valid = std::bool_constant<
-        (NW == 1 && W*H<=64) && (W*H*ST_SHAPE::cols*ST_SHAPE::rows*sizeof(T) <= kittens::MAX_SHARED_MEMORY)
+    using rt_dtype = RT;
+    template<int H, int W, int NW, typename axis> using valid = std::bool_constant<
+        (NW == 1 && W*H<=64) && (W*H*kittens::TILE_COL_DIM<T>*kittens::TILE_ROW_DIM<T>*sizeof(T) <= kittens::MAX_SHARED_MEMORY)
     >;
     static inline const std::string test_identifier = std::is_same_v<T, kittens::bf16> ? "shared_loadstore_gmem=bf16" :
                                                       std::is_same_v<T, kittens::half> ? "shared_loadstore_gmem=half" :
-                                                      std::is_same_v<T, kittens::fp8e4m3> ? "shared_loadstore_gmem=fp8e4m3" :
                                                                                               "shared_loadstore_gmem=float";
     template<int H, int W, int NW, kittens::ducks::gl::all GL, typename axis> __host__ static void host_func(const std::vector<float> &i_ref, std::vector<float> &o_ref) {
         o_ref = i_ref; // overwrite the whole thing
     }
-    template<typename RT_SHAPE, typename ST_SHAPE, typename dtype, int H, int W, int NW, kittens::ducks::gl::all GL, typename axis> __device__ static void device_func(const GL &input, const GL &output) {
+    template<int H, int W, int NW, kittens::ducks::gl::all GL, typename axis> __device__ static void device_func(const GL &input, const GL &output) {
         extern __shared__ kittens::alignment_dummy __shm[]; // this is the HIP shared memory
         kittens::shared_allocator<1024> al((int*)&__shm[0]);
-        using ST = kittens::st<T, ST_SHAPE::rows*H, ST_SHAPE::cols*W, ST_SHAPE>;
+        using ST = kittens::st<T, kittens::TILE_ROW_DIM<T>*H, kittens::TILE_COL_DIM<T>*W>;
         ST &shared_tile = al.allocate<ST>();
         int num_batches = axis::value==0?((int)input.batch()/shared_tile.rows):(int)input.batch();
         int num_depths = axis::value==1?((int)input.depth()/shared_tile.rows):(int)input.depth();
@@ -98,55 +99,8 @@ void warp::memory::tile::global_to_shared::tests(test_data &results) {
                          INTENSITY_2 ? 4  :
                          INTENSITY_3 ? 8  :
                          INTENSITY_4 ? 16 : -1;
-
-
-    using RT_SHAPE_1 = kittens::ducks::rt_shape::rt_16x16;
-    using ST_SHAPE_1 = kittens::ducks::st_shape::st_16x16;
-    // g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_1, ST_SHAPE_1, SIZE, SIZE, I2_t>::run(results);  // NOTE: unsupported (< 1024 bytes)
-    // g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_1, ST_SHAPE_1, MAX_H, MAX_W>::run(results); // NOTE: unsupported (< 1024 bytes)
-    // g2s_sweep_size_2d_warp<st_load_store<float>, RT_SHAPE_1, ST_SHAPE_1, SIZE, SIZE, I2_t>::run(results); // NOTE: Not needed
-
-
-    using ST_SHAPE_2 = kittens::ducks::st_shape::st_16x16_swizzled;
-    // NOTE: unsupported.
-    // TODO: fp8e4m3
-    using RT_SHAPE_3 = kittens::ducks::rt_shape::rt_32x32;
-    using ST_SHAPE_3 = kittens::ducks::st_shape::st_32x32;
-    g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_3, ST_SHAPE_3, SIZE, SIZE, I2_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_3, ST_SHAPE_3, SIZE, SIZE, I2_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_3, ST_SHAPE_3, SIZE, SIZE, I1_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_3, ST_SHAPE_3, SIZE, SIZE, I1_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_3, ST_SHAPE_3, SIZE, SIZE, I0_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_3, ST_SHAPE_3, SIZE, SIZE, I0_t>::run(results);
-    // g2s_sweep_size_2d_warp<st_load_store<float>, RT_SHAPE_3, ST_SHAPE_3, SIZE, SIZE, I2_t>::run(results); // NOTE: unsupported
-
-
-    using RT_SHAPE_4 = kittens::ducks::rt_shape::rt_16x32;
-    using ST_SHAPE_4 = kittens::ducks::st_shape::st_16x32;
-    g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_4, ST_SHAPE_4, SIZE, SIZE, I2_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_4, ST_SHAPE_4, SIZE, SIZE, I2_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_4, ST_SHAPE_4, SIZE, SIZE, I1_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_4, ST_SHAPE_4, SIZE, SIZE, I1_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_4, ST_SHAPE_4, SIZE, SIZE, I0_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_4, ST_SHAPE_4, SIZE, SIZE, I0_t>::run(results);
-    // g2s_sweep_size_2d_warp<st_load_store<float>, RT_SHAPE_4, ST_SHAPE_4, SIZE, SIZE, I2_t>::run(results); // NOTE: unsupported
-
-
-    using RT_SHAPE_5 = kittens::ducks::rt_shape::rt_32x16;
-    using ST_SHAPE_5 = kittens::ducks::st_shape::st_32x16;
-    g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_5, ST_SHAPE_5, SIZE, SIZE, I2_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_5, ST_SHAPE_5, SIZE, SIZE, I2_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_5, ST_SHAPE_5, SIZE, SIZE, I1_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_5, ST_SHAPE_5, SIZE, SIZE, I1_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_5, ST_SHAPE_5, SIZE, SIZE, I0_t>::run(results);
-    g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_5, ST_SHAPE_5, SIZE, SIZE, I0_t>::run(results);
-    // g2s_sweep_size_2d_warp<st_load_store<float>, RT_SHAPE_5, ST_SHAPE_5, SIZE, SIZE, I2_t>::run(results); // NOTE: unsupported
-
-
-    using RT_SHAPE_6 = kittens::ducks::rt_shape::rt_32x32; // placeholder
-    using ST_SHAPE_6 = kittens::ducks::st_shape::st_8x32;
-    // g2s_sweep_size_2d_warp<st_load_store<kittens::bf16>, RT_SHAPE_6, ST_SHAPE_6, SIZE, SIZE, I2_t>::run(results);  // NOTE: unsupported (< 1024 bytes)
-    // g2s_sweep_size_2d_warp<st_load_store<kittens::half>, RT_SHAPE_6, ST_SHAPE_6, SIZE, SIZE, I2_t>::run(results); // NOTE: unsupported (< 1024 bytes)
-    // g2s_sweep_size_2d_warp<st_load_store<float>, RT_SHAPE_6, ST_SHAPE_6, SIZE, SIZE, I2_t>::run(results); // NOTE: unsupported
+    g2s_sweep_gmem_type_2d_warp<st_load_store, SIZE, SIZE, I2_t>::run(results);
+    g2s_sweep_gmem_type_2d_warp<st_load_store, SIZE, SIZE, I1_t>::run(results);
+    g2s_sweep_gmem_type_2d_warp<st_load_store, SIZE, SIZE, I0_t>::run(results);
 }
 #endif

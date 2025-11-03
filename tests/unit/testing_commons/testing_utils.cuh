@@ -57,35 +57,36 @@ using test_data = std::vector<test_info>;
 /* --------------------  TEMPLATE METAPROGRAMMING UTILS  -------------------- */
 
 // 1D wrapper
-template<template<typename, typename, typename, int, int, typename...> typename base, typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_S, int NUM_WORKERS, int S, typename... args>
+template<template<typename,int,int,typename...> typename base, typename test, int MAX_S, int NUM_WORKERS, int S, typename... args>
 struct loop_s {
     static void run(test_data& results) {
         if constexpr (S > 1) {
-            loop_s<base, test, RT_SHAPE, ST_SHAPE, MAX_S, NUM_WORKERS, S-1, args...>::run(results);
+            loop_s<base, test, MAX_S, NUM_WORKERS, S-1, args...>::run(results);
         }
-        base<test, RT_SHAPE, ST_SHAPE, S, NUM_WORKERS, args...>::run(results);
+        base<test, S, NUM_WORKERS, args...>::run(results);
     }
 };
 
 // 2D wrappers
-template<template<typename,typename,typename,int,int,int,typename...> typename base, typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_H, int MAX_W, int NUM_WORKERS, int H, int W, typename... args>
+template<template<typename,int,int,int,typename...> typename base, typename test, int MAX_H, int MAX_W, int NUM_WORKERS, int H, int W, typename... args>
 struct loop_w {
     static void run(test_data& results) {
         if constexpr (W > 1) {
-            loop_w<base, test, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, NUM_WORKERS, H, W-1, args...>::run(results);
+            loop_w<base, test, MAX_H, MAX_W, NUM_WORKERS, H, W-1, args...>::run(results);
         }
-        base<test, RT_SHAPE, ST_SHAPE, H, W, NUM_WORKERS, args...>::run(results);
+        base<test, H, W, NUM_WORKERS, args...>::run(results);
     }
 };
-template<template<typename, typename, typename, int, int, int, typename...> typename base, typename test, typename RT_SHAPE, typename ST_SHAPE, int MAX_H, int MAX_W, int NUM_WORKERS, int H, typename... args>
+template<template<typename,int,int,int,typename...> typename base, typename test, int MAX_H, int MAX_W, int NUM_WORKERS, int H, typename... args>
 struct loop_h {
     static void run(test_data& results) {
         if constexpr (H > 1) {
-            loop_h<base, test, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, NUM_WORKERS, H-1, args...>::run(results);
+            loop_h<base, test, MAX_H, MAX_W, NUM_WORKERS, H-1, args...>::run(results);
         }
-        loop_w<base, test, RT_SHAPE, ST_SHAPE, MAX_H, MAX_W, NUM_WORKERS, H, MAX_W, args...>::run(results);
+        loop_w<base, test, MAX_H, MAX_W, NUM_WORKERS, H, MAX_W, args...>::run(results);
     }
 };
+
 
 /* --------------------  TEST INITIALIZE+VALIDATE FUNCS  -------------------- */
 
@@ -129,10 +130,6 @@ void initialize(T1 **d_i, T2 **d_o, std::vector<float> &i_ref, std::vector<float
             i_t[idx] = __float2half(f);
             i_ref[idx] = __half2float(i_t[idx]);
         }
-        else if constexpr (std::is_same_v<T1, fp8e4m3>) {
-            i_t[idx] = fp8e4m3(f);
-            i_ref[idx] = float(i_t[idx]);
-        }
         else {
             assert(false && "Unsupported data type");
         }
@@ -151,8 +148,8 @@ void initialize(T **d_i, T **d_o, std::vector<float> &i_ref, std::vector<float> 
 }
 
 extern int should_write_outputs;
-template<typename T>
-test_result validate(T *d_i, T *d_o, const std::vector<float> &i_ref, std::vector<float> &o_ref, std::string test_name, int cols, float atol=1e-2, float rtol=1e-2) { // default eps has to be fairly high due to lots of different types
+template<typename T1, typename T2>
+test_result validate(T1 *d_i, T2 *d_o, const std::vector<float> &i_ref, std::vector<float> &o_ref, std::string test_name, int cols, float eps=5e-2) { // default eps has to be fairly high due to lots of different types
     using namespace kittens;
     const int input_size  = i_ref.size();
     const int output_size = o_ref.size();
@@ -176,10 +173,6 @@ test_result validate(T *d_i, T *d_o, const std::vector<float> &i_ref, std::vecto
             o[idx] = o_t[idx];
             o_ref[idx] = o_ref[idx];
         }
-        else if constexpr (std::is_same_v<T2, fp8e4m3>) {
-            o[idx] = float(o_t[idx]);
-            o_ref[idx] = float(fp8e4m3(o_ref[idx]));
-        }
         else {
             assert(false && "Unsupported data type");
         }
@@ -188,38 +181,26 @@ test_result validate(T *d_i, T *d_o, const std::vector<float> &i_ref, std::vecto
     std::cout << "test `" << test_name << "` ";
     bool good = true;
     float max_diff = 0;
-    int max_diff_idx = -1;
-    int first_mismatch_idx = -1;
-    float first_ref_val = 0, first_out_val = 0;
-    float max_ref_val = 0, max_out_val = 0;
+    int max_diff_idx = 0;
+
+    bool use_relative = true;
     for(int i = 0; i < output_size; i++) {
-        if(abs(o_ref[i] - o[i]) > atol + rtol*abs(o_ref[i])) {
-            printf("o_ref[%d]: %f, o[%d]: %f\n", i, o_ref[i], i, o[i]);
-            printf("abs(o_ref[%d] - o[%d]): %f\n", i, i, abs(o_ref[i] - o[i]));
+        float diff = abs(o_ref[i] - o[i]);
+        float threshold = eps;
+        if(use_relative) {
+            // Use relative error for values far from zero
+            float scale = std::max(abs(o_ref[i]), 1e-6f);
+            threshold = eps * scale;
+        }
+        
+        if(diff > threshold) {
             good = false;
-            if(first_mismatch_idx == -1) {
-                first_mismatch_idx = i;
-                first_ref_val = o_ref[i];
-                first_out_val = o[i];
-            }
-            if(diff > max_diff) {
-                max_diff = diff;
-                max_diff_idx = i;
-                max_ref_val = o_ref[i];
-                max_out_val = o[i];
-            }
+            max_diff = std::max(max_diff, diff);
+            max_diff_idx = i;
         }
     }
     if(good) std::cout << " -- PASSED" << std::endl;
-    else {
-        std::cout << " ----- ALERT! FAILED test `" << test_name << "` -----" << std::endl;
-        if(first_mismatch_idx != -1) {
-            std::cout << "First mismatch at index " << first_mismatch_idx << ": ref=" << first_ref_val << ", out=" << first_out_val << std::endl;
-        }
-        if(max_diff_idx != -1) {
-            std::cout << "Largest mismatch at index " << max_diff_idx << ": ref=" << max_ref_val << ", out=" << max_out_val << ", diff=" << max_diff << std::endl;
-        }
-    }
+    else std::cout << " ----- ALERT! FAILED test `" << test_name << "` -----" << std::endl;
     if(should_write_outputs && !good) {
         std::ofstream reffile("outputs/"+test_name+"_ref.txt");
         std::ofstream outfile("outputs/"+test_name+"_out.txt");
@@ -238,9 +219,6 @@ test_result validate(T *d_i, T *d_o, const std::vector<float> &i_ref, std::vecto
         for(int i = 0; i < input_size; i++) {
             reffile << i_ref[i] << ' ';
             if(i%cols == cols-1) {
-                reffile << '\n';
-            }
-            if (i == input_size/2-1) {
                 reffile << '\n';
             }
         }

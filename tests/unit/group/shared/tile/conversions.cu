@@ -15,9 +15,13 @@ struct test_shared_copy {
         kittens::st_bf<16*H, 16*W> &t1 = al.allocate<kittens::st_bf<16*H, 16*W>>();
         kittens::st_bf<16*H, 16*W> &t2 = al.allocate<kittens::st_bf<16*H, 16*W>>();
         G::load(t2, input, {});
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::copy(t1, t2);
-        G::sync(0);
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         G::store(output, t1, {});
     }
 };
@@ -26,8 +30,8 @@ void group::shared::tile::conversions::tests(test_data &results) {
     std::cout << "\n ----- Starting ops/group/shared/conversions tests! -----\n" << std::endl;
     constexpr int SIZE = INTENSITY_1 ? 2  :
                          INTENSITY_2 ? 4  : 
-                         INTENSITY_3 ? 8  :
-                         INTENSITY_4 ? 16 : -1;
+                         INTENSITY_3 ? 7  : // CDNA3 has 65KB shared memory
+                         INTENSITY_4 ? 7 : -1; // CDNA3 has 65KB shared memory
 
     sweep_size_2d<test_shared_copy, SIZE, SIZE, 2>::run(results);
 

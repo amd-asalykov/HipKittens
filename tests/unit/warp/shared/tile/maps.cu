@@ -17,6 +17,9 @@ struct test_exp {
         kittens::shared_allocator al((int*)&__shm[0]); 
         kittens::st<dtype, 16*H, 16*W> &shared_tile = al.allocate<kittens::st<dtype, 16*H, 16*W>>();
         kittens::load(shared_tile, input, {});
+        __builtin_amdgcn_s_waitcnt(0);
+        __builtin_amdgcn_sched_barrier(0);
+        __builtin_amdgcn_s_barrier();
         kittens::exp(shared_tile, shared_tile);
         kittens::store(output, shared_tile, {});
     }
@@ -26,8 +29,8 @@ void warp::shared::tile::maps::tests(test_data &results) {
     std::cout << "\n ----- Starting ops/warp/shared/tile/maps tests! -----\n" << std::endl;
     constexpr int SIZE = INTENSITY_1 ? 2  :
                          INTENSITY_2 ? 4  : 
-                         INTENSITY_3 ? 8  :
-                         INTENSITY_4 ? 16 : -1;
+                         INTENSITY_3 ? 7  : // 7 is the max for CDNA3 (65 KB max shared memory)
+                         INTENSITY_4 ? 7 : -1; // 7 is the max for CDNA3 (65 KB max shared memory)
     sweep_gmem_type_2d_warp<test_exp, SIZE, SIZE>::run(results);
 }
 
