@@ -1,7 +1,0 @@
-"Correlation_Id","Dispatch_Id","Agent_Id","Queue_Id","Process_Id","Thread_Id","Grid_Size","Kernel_Id","Kernel_Name","Workgroup_Size","LDS_Block_Size","Scratch_Size","VGPR_Count","Accum_VGPR_Count","SGPR_Count","Counter_Name","Counter_Value","Start_Timestamp","End_Timestamp"
-1,1,"Agent 2",1,145488,145488,512,8,"__amd_rocclr_copyBuffer",512,0,0,8,0,32,"SQ_INSTS_LDS",0.00000000e+00,82867992639833,82867992643353
-1,1,"Agent 2",1,145488,145488,512,8,"__amd_rocclr_copyBuffer",512,0,0,8,0,32,"SQ_LDS_BANK_CONFLICT",0.00000000e+00,82867992639833,82867992643353
-2,2,"Agent 2",1,145488,145488,512,8,"__amd_rocclr_copyBuffer",512,0,0,8,0,32,"SQ_INSTS_LDS",0.00000000e+00,82867992980514,82867992982954
-2,2,"Agent 2",1,145488,145488,512,8,"__amd_rocclr_copyBuffer",512,0,0,8,0,32,"SQ_LDS_BANK_CONFLICT",0.00000000e+00,82867992980514,82867992982954
-3,3,"Agent 2",1,145488,145488,64,11,"micro_tk(micro_globals)",64,0,0,20,0,32,"SQ_INSTS_LDS",1.000000,82867997014531,82867997122932
-3,3,"Agent 2",1,145488,145488,64,11,"micro_tk(micro_globals)",64,0,0,20,0,32,"SQ_LDS_BANK_CONFLICT",1.000000,82867997014531,82867997122932

@@ -81,7 +81,7 @@ template<int _d_model> struct norm_globals {
     size_t dynamic_shared_memory() { return 0; }
 };
 
-template<int D> //__launch_bounds__(NUM_THREADS, 2)
+template<int D> __launch_bounds__(NUM_THREADS, 2)
 __global__ void layernorm_tk(const norm_globals<D> g) {
 
     auto warpid = kittens::warpid();
@@ -89,7 +89,7 @@ __global__ void layernorm_tk(const norm_globals<D> g) {
     const int seq_start = blockIdx.x*g.n_per_tile;
 
     constexpr int d_model = D;
-    rv_naive<bf16, d_model> residual_s_reg, x_s_reg, norm_weight_s_reg, norm_bias_s_reg;
+    rv<bf16, d_model> residual_s_reg, x_s_reg, norm_weight_s_reg, norm_bias_s_reg;
     load(x_s_reg, g.x, {0, batch, seq_start + warpid, 0});
     asm volatile("s_waitcnt vmcnt(0)");
     load(residual_s_reg, g.residual, {0, batch, seq_start + warpid, 0});

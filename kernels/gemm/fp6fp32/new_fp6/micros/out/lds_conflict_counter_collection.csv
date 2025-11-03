@@ -1,3 +1,0 @@
-"Correlation_Id","Dispatch_Id","Agent_Id","Queue_Id","Process_Id","Thread_Id","Grid_Size","Kernel_Id","Kernel_Name","Workgroup_Size","LDS_Block_Size","Scratch_Size","VGPR_Count","Accum_VGPR_Count","SGPR_Count","Counter_Name","Counter_Value","Start_Timestamp","End_Timestamp"
-1,1,"Agent 2",1,180363,180363,16384,11,"micro_tk(micro_globals)",512,0,0,36,0,32,"SQ_INSTS_LDS",262144.000000,2006966993585132,2006966994086094
-1,1,"Agent 2",1,180363,180363,16384,11,"micro_tk(micro_globals)",512,0,0,36,0,32,"SQ_LDS_BANK_CONFLICT",0.00000000e+00,2006966993585132,2006966994086094

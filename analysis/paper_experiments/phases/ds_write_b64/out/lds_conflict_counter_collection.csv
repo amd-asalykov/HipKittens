@@ -1,7 +1,0 @@
-"Correlation_Id","Dispatch_Id","Agent_Id","Queue_Id","Process_Id","Thread_Id","Grid_Size","Kernel_Id","Kernel_Name","Workgroup_Size","LDS_Block_Size","Scratch_Size","VGPR_Count","Accum_VGPR_Count","SGPR_Count","Counter_Name","Counter_Value","Start_Timestamp","End_Timestamp"
-1,1,"Agent 2",1,2334470,2334470,256,7,"void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<unsigned int>, std::array<char*, 1ul> >(int, at::native::FillFunctor<unsigned int>, std::array<char*, 1ul>)",256,0,0,4,0,16,"SQ_INSTS_LDS",0.00000000e+00,8543927506022887,8543927506025126
-1,1,"Agent 2",1,2334470,2334470,256,7,"void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<unsigned int>, std::array<char*, 1ul> >(int, at::native::FillFunctor<unsigned int>, std::array<char*, 1ul>)",256,0,0,4,0,16,"SQ_LDS_BANK_CONFLICT",0.00000000e+00,8543927506022887,8543927506025126
-2,2,"Agent 2",1,2334470,2334470,512,176,"__amd_rocclr_copyBuffer",512,0,0,8,0,32,"SQ_INSTS_LDS",0.00000000e+00,8543927506436359,8543927506438958
-2,2,"Agent 2",1,2334470,2334470,512,176,"__amd_rocclr_copyBuffer",512,0,0,8,0,32,"SQ_LDS_BANK_CONFLICT",0.00000000e+00,8543927506436359,8543927506438958
-3,3,"Agent 2",1,2334470,2334470,64,179,"micro_tk(micro_globals)",64,0,0,4,0,16,"SQ_INSTS_LDS",1.000000,8543927507436108,8543927507437907
-3,3,"Agent 2",1,2334470,2334470,64,179,"micro_tk(micro_globals)",64,0,0,4,0,16,"SQ_LDS_BANK_CONFLICT",60.000000,8543927507436108,8543927507437907
