@@ -1,7 +1,7 @@
 
 ## Setup mi300x
 
-Load docker:
+Run:
 ```bash
 podman run -it --privileged --network=host --ipc=host \
   -v /shared/amdgpu/home/tech_ops_amd_xqh/simran:/workdir \

@@ -220,7 +220,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     load<1, qo_tile<D, float>, _gl_QKVO>(q_reg_fl, g.Qg, {batch_idx, tile_idx, head_idx, 0});
     mul(q_reg_fl, q_reg_fl, TEMPERATURE_SCALE);  // Use sqrtf for clarity
     copy(q_reg, q_reg_fl);
-    swap_layout_and_transpose(q_reg_transposed, q_reg);
+    transpose(q_reg_transposed, q_reg);
 
     // All warps then collaboratively load in the first slice of V (V0) and the second slice of K (K1) into shared memory
     G::load<1, false>(k_smem[1], g.Kg, {batch_idx, 1, head_idx_kv, 0}, swizzled_offsets_K);
@@ -235,7 +235,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
 
     // Each warp performs QK0
     zero(att_block[0]);
-    swap_layout_and_transpose(k_reg_transposed, k_reg);
+    transpose(k_reg_transposed, k_reg);
     mma_AtB(att_block[0], k_reg_transposed, q_reg_transposed, att_block[0]);
     __builtin_amdgcn_sched_barrier(0); 
     if constexpr (causal) { 
@@ -277,7 +277,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
         // Cluster 0:
         //      QK1
         zero(att_block[1]);
-        swap_layout_and_transpose(k_reg_transposed, k_reg);
+        transpose(k_reg_transposed, k_reg);
         mma_AtB(att_block[1], k_reg_transposed, q_reg_transposed, att_block[1]);
         //      Finish softmax for QK0
         exp2(att_block[0].tiles[1][0], att_block[0].tiles[1][0]);
@@ -337,7 +337,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
         //      QK2
         __builtin_amdgcn_s_setprio(1);
         zero(att_block[0]);
-        swap_layout_and_transpose(k_reg_transposed, k_reg);
+        transpose(k_reg_transposed, k_reg);
         mma_AtB(att_block[0], k_reg_transposed, q_reg_transposed, att_block[0]);
         //      Finish softmax for QK1
         exp2(att_block[1].tiles[1][0], att_block[1].tiles[1][0]);
@@ -405,7 +405,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     // Cluster 0:
     //      QK3
     zero(att_block[1]);
-    swap_layout_and_transpose(k_reg_transposed, k_reg);
+    transpose(k_reg_transposed, k_reg);
     mma_AtB(att_block[1], k_reg_transposed, q_reg_transposed, att_block[1]);
     //      Finish softmax for QK2
     exp2(att_block[0].tiles[1][0], att_block[0].tiles[1][0]);
@@ -471,7 +471,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     // Cluster 4:
     //      QK4
     zero(att_block[0]);
-    swap_layout_and_transpose(k_reg_transposed, k_reg);
+    transpose(k_reg_transposed, k_reg);
     mma_AtB(att_block[0], k_reg_transposed, q_reg_transposed, att_block[0]);
     //      Finish softmax for QK3
     exp2(att_block[1].tiles[1][0], att_block[1].tiles[1][0]);
@@ -533,7 +533,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     // Cluster 8:
     //      QK5
     zero(att_block[1]);
-    swap_layout_and_transpose(k_reg_transposed, k_reg);
+    transpose(k_reg_transposed, k_reg);
     mma_AtB(att_block[1], k_reg_transposed, q_reg_transposed, att_block[1]);
     //      Finish softmax for QK4
     exp2(att_block[0].tiles[1][0], att_block[0].tiles[1][0]);
@@ -611,7 +611,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     }
 
     qo_tile<D, float, row_l, rt_32x32_s> o_reg_transposed;
-    swap_layout_and_transpose(o_reg_transposed, o_reg);
+    transpose(o_reg_transposed, o_reg);
     store<1>(g.Og, o_reg_transposed, {batch_idx, tile_idx, head_idx, 0});
 
     // multiply by ln(2)
