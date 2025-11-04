@@ -59,30 +59,31 @@ make -j64
 
 1. **BF16 GEMM**
 ```bash
-# gemm kernel
-cd kernels/gemm/bf16fp32/mi325x/256_256_64_16/
+# Defaults to 8192x8192x8192
+# This will compare to AITER and PyTorch automatically.
+cd kernels/gemm/bf16fp32/mi350x/8192_256_256_64_32/
 make clean && make
 python test_python.py
 ```
-This will compare to AITER and PyTorch automatically.
 
 2. **Attention forwards (MHA, GQA, Causal, Non-causal, Head dim 128 / 64)**
 
-GQA, Non-causal, D=128, N=2048, H=64, H_KV=8, B=16:
 ```bash
+# GQA, Non-causal, D=128, N=2048, H=64, H_KV=8, B=16:
+# This will compare to AITER automatically. 
 cd kernels/attn/gqa/
 make clean && make
 python test_python.py
 ```
-This will compare to AITER automatically. 
 
 - Modify the ```ATTN_N``` sequence length (e.g., 1024, 2048, 4096, 8192), ```ATTN_H``` query heads and ```ATTN_H_KV``` key value heads (e.g., 16 and 16 for MHA), ```ATTN_D``` head dimension (i.e., 64 or 128) in the Makefile and test_python.py file to try other settings.
 - Use the same process for [gqa_causal](https://github.com/HazyResearch/HipKittens/tree/main/kernels/attn/gqa_causal).
 
 3. **Attention backwards (MHA, GQA, Causal, Non-causal, Head dim 128 / 64)**
 
-GQA, Non-causal, D=128, N=8192, H=64, H_KV=8, B=16:
 ```bash
+# GQA, Non-causal, D=128, N=8192, H=64, H_KV=8, B=16:
+# This will compare to AITER automatically. 
 cd kernels/attn/gqa_backwards/
 make clean && make
 python test_python.py 
@@ -93,22 +94,21 @@ python test_python.py
 
 4. **Memory bound**
 
-Rotary (default B=16, H=16, D=128, N=2048)
 ```bash
+# Rotary (default B=16, H=16, D=128, N=2048)
+# This will compare to AITER, PyTorch, PyTorch compiled automatically.
 cd kernels/rotary/
 make clean && make
 python test_python.py
 ```
-This will compare to AITER, PyTorch, PyTorch compiled automatically.
 
-Layernorm fused (default B=16, H=16, D=128, N=4096)
 ```bash
+# Layernorm fused (default B=16, H=16, D=128, N=4096)
+# This will compare to PyTorch, PyTorch compiled automatically.
 cd kernels/layernorm/
 make clean && make
 python test_python.py
 ```
-This will compare to PyTorch, PyTorch compiled automatically.
-
 
 Potental issues:
 - If you see a complaint that AITER is not building in the ```test_python.py``` files, then instal AITER from source [following this README.md](https://github.com/ROCm/aiter/tree/main). Luckily, it is very quick! You can also comment out AITER from ```test_python.py``` if you only need the HK kernel.
