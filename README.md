@@ -55,9 +55,9 @@ cd HipKittens/tests/unit
 make -j64
 ```
 
-### Quick start: running kernels
+## Quick start: running kernels
 
-1. GEMM:
+1. **BF16 GEMM**
 ```bash
 # gemm kernel
 cd kernels/gemm/bf16fp32/mi325x/256_256_64_16/
@@ -66,7 +66,7 @@ python test_python.py
 ```
 This will compare to AITER and PyTorch automatically.
 
-2. Attention forwards 
+2. **Attention forwards (MHA, GQA, Causal, Non-causal, Head dim 128 / 64)**
 
 GQA, Non-causal, D=128, N=2048, H=64, H_KV=8, B=16:
 ```bash
@@ -79,7 +79,7 @@ This will compare to AITER automatically.
 - Modify the ```ATTN_N``` sequence length (e.g., 1024, 2048, 4096, 8192), ```ATTN_H``` query heads and ```ATTN_H_KV``` key value heads (e.g., 16 and 16 for MHA), ```ATTN_D``` head dimension (i.e., 64 or 128) in the Makefile and test_python.py file to try other settings.
 - Use the same process for [gqa_causal](https://github.com/HazyResearch/HipKittens/tree/main/kernels/attn/gqa_causal).
 
-3. Attention backwards
+3. **Attention backwards (MHA, GQA, Causal, Non-causal, Head dim 128 / 64)**
 
 GQA, Non-causal, D=128, N=8192, H=64, H_KV=8, B=16:
 ```bash
@@ -91,7 +91,7 @@ python test_python.py
 - Modify the settings in the same way as stated above for forwards.
 - Try [gqa_causal_backwards](https://github.com/HazyResearch/HipKittens/tree/main/kernels/attn/gqa_causal_backwards).
 
-4. Memory bound
+4. **Memory bound**
 
 Rotary (default B=16, H=16, D=128, N=2048)
 ```bash
@@ -115,21 +115,18 @@ Potental issues:
 - If you see an error that ```bin/hipcc/``` is not found, then edit the Makefile to replace ROCM_BUILD_DIR with ```/opt/rocm/bin/hipcc```
 
 
-### Benchmarking
+## Benchmarking
 
 Under [HipKittens/analysis](https://github.com/HazyResearch/HipKittens/tree/main/analysis) we provide scripts and instructions to benchmark all the HK kernels from our paper. This will sweep over different dimensions and settings, and we provide plotting scripts. 
 
 
-### Training
+## Training
 
 Under [HipKittens/training](https://github.com/HazyResearch/HipKittens/tree/main/training) we provide instructions to train either BERT or Llama models using HipKittens attention kernels, AITER kernels, or PyTorch kernels. These are lightweight. Run them within the AMD Docker.
 
-### Resources
+## Resources
 
-We provide resources for profiling kernels, dockers, and HipKittens in [HipKittens/docs](https://github.com/HazyResearch/HipKittens/tree/main/docs).
-
-Contribute to our [onboarding documents](https://docs.google.com/document/d/15-Zvf6e0NLX1si4ml4sUOWCDlXNMtOWKiuo6CKZMEYA/edit?usp=sharing).
-
+We provide resources for profiling kernels, dockers, and HipKittens in [HipKittens/docs](https://github.com/HazyResearch/HipKittens/tree/main/docs). Contribute to our [onboarding documents](https://docs.google.com/document/d/15-Zvf6e0NLX1si4ml4sUOWCDlXNMtOWKiuo6CKZMEYA/edit?usp=sharing).
 
 ### Get in touch!
 
