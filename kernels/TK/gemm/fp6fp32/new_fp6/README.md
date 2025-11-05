@@ -1,6 +1,6 @@
 
 # FP6 8192x8192x8192 GEMM with 256x256 tile & K-step 128
-Kernel is in file: `variants/16x16x128_4wave.cpp` and the name is `micro_tk`
+Kernel is in file: `variants/16x16x128_4wave_dwordx4.cpp` and the name is `micro_tk`
 
 To run: in `new_fp6/`: `make && ./tk_kernel`
 
@@ -14,7 +14,7 @@ We double buffer shared memory (2 256x128 A shared tiles and 2 256x128 B shared 
 - bottom half of B tile
 - bottom half of A tile
 
-Each of the above loads is actually 4 `load_dwordx3` instructions. In this kernel, we've manually interleaved each individual `load_dwordx3` with the `ds_read_b96` and `mfma` instructions.
+Each of the above loads is actually 3 `load_dwordx4` instructions. In this kernel, we've manually interleaved each individual `load_dwordx4` with the `ds_read_b64` and `mfma` instructions.
 
 
 ## Some notes to self for development
