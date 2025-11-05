@@ -312,7 +312,7 @@ void pack(uint32_t *output, const din *input, int size) {
     }
 }
 
-constexpr int ROTATING_BUFFER_COUNT = ((((1024*1024)/M)*512)/K)/2; // 500 MiB
+constexpr int ROTATING_BUFFER_COUNT = ((((1024*1024)/M)*512)/K); // 1000 MiB
 
 // Random initialization function
 void random_init(din* a_host, din* b_host, uint32_t seed = 42) {
