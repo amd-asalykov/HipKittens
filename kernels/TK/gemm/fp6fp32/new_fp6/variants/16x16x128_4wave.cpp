@@ -285,6 +285,38 @@ __device__ inline static void do_interleaved_cluster(
     }
 }
 
+/**
+   * @brief Transform a workgroup ID to a new workgroup ID based on the chunk size and number of XCDs.
+   * @param workgroup_id The original workgroup ID.
+   * @param num_workgroups The total number of workgroups.
+   * @param num_xcds The number of XCDs.
+   * @param chunk_size The chunk size.
+   * @return The new workgroup ID.
+   */
+   __host__ __device__ inline int chiplet_transform_chunked(
+    int workgroup_id, 
+    int num_workgroups,
+    int num_xcds,
+    int chunk_size 
+) {
+    // Current XCD
+    int xcd = workgroup_id % num_xcds;
+
+    // Largest full (NUM_XCDS*CHUNK_SIZE)-aligned block
+    int block = num_xcds * chunk_size;
+    int limit = (num_workgroups / block) * block;
+
+    // If pid beyond the last full block, leave unchanged
+    if (workgroup_id > limit) return workgroup_id;
+
+    // Local PID (within round-robin assignment)
+    int local_pid    = workgroup_id / num_xcds;
+    int chunk_idx    = local_pid / chunk_size;
+    int pos_in_chunk = local_pid % chunk_size;
+
+    // New PID
+    return chunk_idx * block + xcd * chunk_size + pos_in_chunk;
+}
 
 __global__ __launch_bounds__(NUM_THREADS, 1)
 void micro_tk(const micro_globals g) {
@@ -300,35 +332,30 @@ void micro_tk(const micro_globals g) {
     using RT_B = rt_f6<REG_BLOCK_N, K_STEP>;
     using RT_C = rt_fl<REG_BLOCK_M, REG_BLOCK_N, ducks::rt_layout::accumulator>;
 
-
-    // Convert linear block ID to 2D coordinates
     // Original WGID.
-    // int wgid = (blockIdx.y * gridDim.x) + blockIdx.x;
-    // const int NUM_WGS = gridDim.x * gridDim.y;
-    // const int NUM_XCDS = 8;
-    // const int CUS_PER_XCD = 32;
-    // const int NUM_CUS = CUS_PER_XCD * NUM_XCDS;
-    // // Swizzle chiplet so that wgids are in the same XCD.
-    // wgid = (wgid % NUM_XCDS) * (NUM_WGS / NUM_XCDS) + (wgid / NUM_XCDS);
-    // // Swizzle for better L2 within the same XCD.
-    // const int WGM = 4;
-    // const int num_pid_m = (M + BLOCK_SIZE_M - 1) / BLOCK_SIZE_M;
-    // const int num_pid_n = (N + BLOCK_SIZE_N - 1) / BLOCK_SIZE_N;
-    // int num_wgid_in_group = WGM * num_pid_n;
-    // int group_id = wgid / num_wgid_in_group;
-    // int first_pid_m = group_id * WGM;
-    // int group_size_m = min(num_pid_m - first_pid_m, WGM);
-    // int pid_m = first_pid_m + ((wgid % num_wgid_in_group) % group_size_m);
-    // int pid_n = (wgid % num_wgid_in_group) / group_size_m;
-    // // Assign the tile's row/column based on the pid_m and pid_n.
-    // const int row = pid_m; // blockIdx.x
-    // const int col = pid_n; // blockIdx.y
+    int wgid = (blockIdx.y * gridDim.x) + blockIdx.x;
+    const int NUM_WGS  = gridDim.x * gridDim.y;
+    const int NUM_XCDS = 8;
+    const int WGM = 8;
+    // Swizzle chiplet so that wgids are in the same XCD.
+    wgid = chiplet_transform_chunked(wgid, NUM_WGS, NUM_XCDS, WGM*WGM);
+    // Swizzle for better L2 within the same XCD.
+    const int num_pid_m = ceil_div(M, BLOCK_SIZE_M); // 7680 / 192 = 40
+    const int num_pid_n = ceil_div(N, BLOCK_SIZE_N); // 7680 / 256 = 30
+    const int num_wgid_in_group = WGM * num_pid_n;
+    int group_id = wgid / num_wgid_in_group;
+    int first_pid_m = group_id * WGM;
+    int group_size_m = min(num_pid_m - first_pid_m, WGM);
+    int pid_m = first_pid_m + ((wgid % num_wgid_in_group) % group_size_m);
+    int pid_n = (wgid % num_wgid_in_group) / group_size_m;
+    // Assign the tile's row/column based on the pid_m and pid_n.
+    int row = pid_m; 
+    int col = pid_n;
 
-
-    int block_row = blockIdx.y;
-    int block_col = blockIdx.x;
-    // int block_row = row;
-    // int block_col = col;
+    // int block_row = blockIdx.y;
+    // int block_col = blockIdx.x;
+    int block_row = row;
+    int block_col = col;
     int block_m = block_row * BLOCK_SIZE_M;
     int block_n = block_col * BLOCK_SIZE_N;
 
