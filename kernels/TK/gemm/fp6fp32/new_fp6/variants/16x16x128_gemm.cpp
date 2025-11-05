@@ -25,7 +25,7 @@ constexpr int REG_BLOCK_N      = BLOCK_SIZE_N / 2;
 #define NUM_WARPS 4
 #define NUM_THREADS (kittens::WARP_THREADS * NUM_WARPS)
 
-#define M 16384
+#define M 8192
 #define K 8192
 #define N 8192
 
@@ -48,99 +48,38 @@ struct micro_globals {
     size_t dynamic_shared_memory() { return MAX_SHARED_MEMORY; } 
 };
 
-// __global__ __launch_bounds__(NUM_THREADS, 1)
-// void micro_tk(const micro_globals g) {
-//     extern __shared__ alignment_dummy __shm[];
-//     shared_allocator al((int*)&__shm[0]);
-//     st_f6<BLOCK_SIZE_M, K_STEP> (&As)[2] = al.allocate<st_f6<BLOCK_SIZE_M, K_STEP>, 2>();
-//     st_f6<BLOCK_SIZE_N, K_STEP> (&Bs)[2] = al.allocate<st_f6<BLOCK_SIZE_N, K_STEP>, 2>();
+/**
+   * @brief Transform a workgroup ID to a new workgroup ID based on the chunk size and number of XCDs.
+   * @param workgroup_id The original workgroup ID.
+   * @param num_workgroups The total number of workgroups.
+   * @param num_xcds The number of XCDs.
+   * @param chunk_size The chunk size.
+   * @return The new workgroup ID.
+   */
+   __host__ __device__ inline int chiplet_transform_chunked(
+    int workgroup_id, 
+    int num_workgroups,
+    int num_xcds,
+    int chunk_size 
+) {
+    // Current XCD
+    int xcd = workgroup_id % num_xcds;
 
-//     uintptr_t A_base = reinterpret_cast<uintptr_t>(&As[0]);
-//     uintptr_t B_base = reinterpret_cast<uintptr_t>(&Bs[0]);
+    // Largest full (NUM_XCDS*CHUNK_SIZE)-aligned block
+    int block = num_xcds * chunk_size;
+    int limit = (num_workgroups / block) * block;
 
-//     st_f6<BLOCK_SIZE_M, K_STEP> *As_ptrs[2] = {
-//         reinterpret_cast<st_f6<BLOCK_SIZE_M, K_STEP>*>(A_base + (reinterpret_cast<uintptr_t>(&As[0]) - A_base) * 6 / 8),
-//         reinterpret_cast<st_f6<BLOCK_SIZE_M, K_STEP>*>(A_base + (reinterpret_cast<uintptr_t>(&As[1]) - A_base) * 6 / 8)
-//     };
+    // If pid beyond the last full block, leave unchanged
+    if (workgroup_id > limit) return workgroup_id;
 
-//     st_f6<BLOCK_SIZE_N, K_STEP> *Bs_ptrs[2] = {
-//         reinterpret_cast<st_f6<BLOCK_SIZE_N, K_STEP>*>(B_base + (reinterpret_cast<uintptr_t>(&Bs[0]) - B_base) * 6 / 8),
-//         reinterpret_cast<st_f6<BLOCK_SIZE_N, K_STEP>*>(B_base + (reinterpret_cast<uintptr_t>(&Bs[1]) - B_base) * 6 / 8)
-//     };
+    // Local PID (within round-robin assignment)
+    int local_pid    = workgroup_id / num_xcds;
+    int chunk_idx    = local_pid / chunk_size;
+    int pos_in_chunk = local_pid % chunk_size;
 
-//     rt_f6<REG_BLOCK_M, K_STEP> A_tile;
-//     rt_f6<REG_BLOCK_N, K_STEP> B_tile;
-//     rt_fl<REG_BLOCK_M, REG_BLOCK_N, ducks::rt_layout::accumulator> C_accum;
-//     zero(C_accum);
-
-//     // Original WGID.
-//     int wgid = (blockIdx.y * gridDim.x) + blockIdx.x;
-//     const int NUM_WGS = gridDim.x * gridDim.y;
-//     const int NUM_XCDS = 8;
-//     const int CUS_PER_XCD = 32;
-//     const int NUM_CUS = CUS_PER_XCD * NUM_XCDS;
-//     // Swizzle chiplet so that wgids are in the same XCD.
-//     wgid = (wgid % NUM_XCDS) * (NUM_WGS / NUM_XCDS) + (wgid / NUM_XCDS);
-//     // Swizzle for better L2 within the same XCD.
-//     const int WGM = 16;
-//     const int num_pid_m = ceil_div(M, BLOCK_SIZE_M);
-//     const int num_pid_n = ceil_div(N, BLOCK_SIZE_N);
-//     int num_wgid_in_group = WGM * num_pid_n;
-//     int group_id = wgid / num_wgid_in_group;
-//     int first_pid_m = group_id * WGM;
-//     int group_size_m = min(num_pid_m - first_pid_m, WGM);
-//     int pid_m = first_pid_m + ((wgid % num_wgid_in_group) % group_size_m);
-//     int pid_n = (wgid % num_wgid_in_group) / group_size_m;
-//     // Assign the tile's row/column based on the pid_m and pid_n.
-//     const int row = pid_m; 
-//     const int col = pid_n;
-
-//     // Info
-//     const int warp_id = kittens::warpid();
-//     const int warp_row = warp_id / 2;
-//     const int warp_col = warp_id % 2;
-//     const int num_tiles = K / K_STEP;
-
-//     int tic = 0;
-//     int toc = 1;
-//     constexpr int bytes_per_thread = 16;
-//     constexpr int memcpy_per_tile_A = (BLOCK_SIZE_M * K_STEP * 6 / 8) / (bytes_per_thread * NUM_THREADS);
-//     constexpr int memcpy_per_tile_B = (BLOCK_SIZE_N * K_STEP * 6 / 8) / (bytes_per_thread * NUM_THREADS);
-
-//     // Register array to store swizzled global addresses for each thread.
-//     uint32_t swizzled_offsets_A[memcpy_per_tile_A];
-//     uint32_t swizzled_offsets_B[memcpy_per_tile_B];
-
-//     prefill_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, 0}, *As_ptrs[tic], swizzled_offsets_A);
-//     prefill_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, 0}, *Bs_ptrs[tic], swizzled_offsets_B);
-
-//     const uint32_t addrA0 = prefill_swizzled_offset_fp6(A_tile, subtile_inplace<REG_BLOCK_M, K_STEP>(*As_ptrs[tic], {warp_row, 0}));
-//     const uint32_t addrA1 = prefill_swizzled_offset_fp6(A_tile, subtile_inplace<REG_BLOCK_M, K_STEP>(*As_ptrs[toc], {warp_row, 0}));
-//     const uint32_t addrB0 = prefill_swizzled_offset_fp6(B_tile, subtile_inplace<REG_BLOCK_N, K_STEP>(*Bs_ptrs[tic], {warp_col, 0}));
-//     const uint32_t addrB1 = prefill_swizzled_offset_fp6(B_tile, subtile_inplace<REG_BLOCK_N, K_STEP>(*Bs_ptrs[toc], {warp_col, 0}));
-//     uint32_t addrA[2] = {addrA0, addrA1};
-//     uint32_t addrB[2] = {addrB0, addrB1};
-
-//     #pragma unroll
-//     for (int tile = 0; tile < num_tiles; ++tile, tic ^= 1, toc ^= 1) {
-//         load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_M, K_STEP>, _gl_A, coord<st_f6<BLOCK_SIZE_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row, tile}, *As_ptrs[tic], swizzled_offsets_A);
-//         load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<BLOCK_SIZE_N, K_STEP>, _gl_B, coord<st_f6<BLOCK_SIZE_N, K_STEP>>, NUM_THREADS>(g.b, {0, 0, col, tile}, *Bs_ptrs[tic], swizzled_offsets_B);
-        
-//         __builtin_amdgcn_s_waitcnt(0);
-//         __builtin_amdgcn_s_barrier();
-
-//         load_lds_reg_row_fp6(A_tile, subtile_inplace<REG_BLOCK_M, K_STEP>(*As_ptrs[tic], {warp_row, 0}), addrA[tic]);
-//         load_lds_reg_row_fp6(B_tile, subtile_inplace<REG_BLOCK_N, K_STEP>(*Bs_ptrs[tic], {warp_col, 0}), addrB[tic]);
-
-//         asm volatile("s_waitcnt lgkmcnt(0)");
-
-//         __builtin_amdgcn_s_setprio(1);
-//         mma_ABt(C_accum, A_tile, B_tile, C_accum);
-//         __builtin_amdgcn_s_setprio(0);
-//     }
-
-//     store(g.c, C_accum, {0, 0, row * 2 + warp_row, col * 2 + warp_col});
-// }
+    // New PID
+    return chunk_idx * block + xcd * chunk_size + pos_in_chunk;
+}
 
 __global__ __launch_bounds__(NUM_THREADS, 1)
 void micro_tk(const micro_globals g) {
@@ -176,25 +115,23 @@ void micro_tk(const micro_globals g) {
 
     // Original WGID.
     int wgid = (blockIdx.y * gridDim.x) + blockIdx.x;
-    const int NUM_WGS = gridDim.x * gridDim.y;
+    const int NUM_WGS  = gridDim.x * gridDim.y;
     const int NUM_XCDS = 8;
-    const int CUS_PER_XCD = 32;
-    const int NUM_CUS = CUS_PER_XCD * NUM_XCDS;
+    const int WGM = 8;
     // Swizzle chiplet so that wgids are in the same XCD.
-    wgid = (wgid % NUM_XCDS) * (NUM_WGS / NUM_XCDS) + (wgid / NUM_XCDS);
+    wgid = chiplet_transform_chunked(wgid, NUM_WGS, NUM_XCDS, WGM*WGM);
     // Swizzle for better L2 within the same XCD.
-    const int WGM = 16;
-    const int num_pid_m = ceil_div(M, BLOCK_SIZE_M);
-    const int num_pid_n = ceil_div(N, BLOCK_SIZE_N);
-    int num_wgid_in_group = WGM * num_pid_n;
+    const int num_pid_m = ceil_div(M, BLOCK_SIZE_M); // 7680 / 192 = 40
+    const int num_pid_n = ceil_div(N, BLOCK_SIZE_N); // 7680 / 256 = 30
+    const int num_wgid_in_group = WGM * num_pid_n;
     int group_id = wgid / num_wgid_in_group;
     int first_pid_m = group_id * WGM;
     int group_size_m = min(num_pid_m - first_pid_m, WGM);
     int pid_m = first_pid_m + ((wgid % num_wgid_in_group) % group_size_m);
     int pid_n = (wgid % num_wgid_in_group) / group_size_m;
     // Assign the tile's row/column based on the pid_m and pid_n.
-    const int row = pid_m; 
-    const int col = pid_n;
+    int row = pid_m; 
+    int col = pid_n;
 
     // Info
     const int warp_id = kittens::warpid();
@@ -246,7 +183,7 @@ void micro_tk(const micro_globals g) {
     load_lds_reg_row_fp6(B_tile[0], subtile_inplace<REG_BLOCK_N/2, K_STEP>(*Bs_ptrs[tic*2], {warp_col, 0}), addrB[tic*2]);
     load_global_to_shared_direct_with_swizzled_offsets_fp6<2, false, st_f6<REG_BLOCK_M, K_STEP>, _gl_A, coord<st_f6<REG_BLOCK_M, K_STEP>>, NUM_THREADS>(g.a, {0, 0, row*2+1, 1}, *As_ptrs[toc*2+1], swizzled_offsets_A);
 
-    asm volatile("s_waitcnt lgkmcnt(12)");
+    asm volatile("s_waitcnt lgkmcnt(0)");
     asm volatile("s_waitcnt vmcnt(12)");
     __builtin_amdgcn_s_barrier();
 
