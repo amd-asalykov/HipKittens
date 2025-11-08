@@ -29,7 +29,6 @@ H = int(sys.argv[3]) if len(sys.argv) > 3 else 64
 H_KV = int(sys.argv[4]) if len(sys.argv) > 4 else 8
 N = int(sys.argv[2]) if len(sys.argv) > 2 else 1024
 causal = int(sys.argv[5]) if len(sys.argv) > 5 else 0
-filename = sys.argv[6]
 dtype = torch.bfloat16
 
 group_size = H // H_KV
@@ -313,28 +312,28 @@ print(f"HipKittens performance: {eff_tk:.2f} TFLOPS for {B=} H={H} H_KV={H_KV} N
 # Comparisons
 # **************************************************
 
-num_print = 8
+# num_print = 8
 
-# HK vs AITER
-print(f"\nHipKittens vs AITER comparison:")
-print("\nO outputs:")
-print("HK: ", O_tk[0, 0, :num_print, 0], "Max:", O_tk.max().item())
-print("AITER: ", out_aiter_bnhd[0, 0, :num_print, 0], "Max:", out_aiter_bnhd.max().item())
+# # HK vs AITER
+# print(f"\nHipKittens vs AITER comparison:")
+# print("\nO outputs:")
+# print("HK: ", O_tk[0, 0, :num_print, 0], "Max:", O_tk.max().item())
+# print("AITER: ", out_aiter_bnhd[0, 0, :num_print, 0], "Max:", out_aiter_bnhd.max().item())
 
-print()
-print("\nGradient K outputs:")
-print("HK: ", dK_tk[0, 0, 0, :num_print], "Max:", dK_tk.max().item())
-print("AITER: ", k_grad_aiter_bnhd[0, 0, 0, :num_print], "Max:", k_grad_aiter_bnhd.max().item())
+# print()
+# print("\nGradient K outputs:")
+# print("HK: ", dK_tk[0, 0, 0, :num_print], "Max:", dK_tk.max().item())
+# print("AITER: ", k_grad_aiter_bnhd[0, 0, 0, :num_print], "Max:", k_grad_aiter_bnhd.max().item())
 
-print()
-print("Gradient V outputs:")
-print("HK: ", dV_tk[0, 0, 0, :num_print], "Max:", dV_tk.max().item())
-print("AITER: ", v_grad_aiter_bnhd[0, 0, 0, :num_print], "Max:", v_grad_aiter_bnhd.max().item())
+# print()
+# print("Gradient V outputs:")
+# print("HK: ", dV_tk[0, 0, 0, :num_print], "Max:", dV_tk.max().item())
+# print("AITER: ", v_grad_aiter_bnhd[0, 0, 0, :num_print], "Max:", v_grad_aiter_bnhd.max().item())
 
-print()
-print("Gradient Q outputs:")
-print("HK: ", dQ_tk[0, 0, 0, :num_print], "Max:", dQ_tk.max().item())
-print("AITER: ", q_grad_aiter_bnhd[0, 0, 0, :num_print], "Max:", q_grad_aiter_bnhd.max().item())
+# print()
+# print("Gradient Q outputs:")
+# print("HK: ", dQ_tk[0, 0, 0, :num_print], "Max:", dQ_tk.max().item())
+# print("AITER: ", q_grad_aiter_bnhd[0, 0, 0, :num_print], "Max:", q_grad_aiter_bnhd.max().item())
 # print("Diff: ", (dQ_tk - q_grad_aiter_bnhd)[0, :, 0, 32:48], "Max:", (dQ_tk - q_grad_aiter_bnhd).max().item())
 
 
@@ -368,40 +367,3 @@ print(f"V grad: max_abs={v_diff.max().item():.6f}, max_rel={v_rel_error:.4f}, "
       f"rel_l2={v_l2_error:.4f}, cos={v_cos:.6f}, "
       f"errors={v_err_cnt}/{v_total} ({100*v_err_cnt/v_total:.4f}%)")
 
-############## LOGGING OUTPUTS ####################
-dQ_max_error = q_diff.max().item()
-dQ_mean_error = q_diff.mean().item()
-dQ_error_count = q_err_cnt
-dK_max_error = k_diff.max().item()
-dK_mean_error = k_diff.mean().item()
-dK_error_count = k_err_cnt
-dV_max_error = v_diff.max().item()
-dV_mean_error = v_diff.mean().item()
-dV_error_count = v_err_cnt
-data_to_log = {
-    "N": N,
-    "avg_time_ref": avg_time_aiter,
-    "tflops_ref": eff_aiter,
-    "avg_time": avg_time_tk,
-    "tflops": eff_tk,
-    "dQ_max_error": dQ_max_error,
-    "dQ_mean_error": dQ_mean_error,
-    "dQ_error_count": dQ_error_count,
-    "dK_max_error": dK_max_error,
-    "dK_mean_error": dK_mean_error,
-    "dK_error_count": dK_error_count,
-    "dV_max_error": dV_max_error,
-    "dV_mean_error": dV_mean_error,
-    "dV_error_count": dV_error_count,
-}
-import json
-if not os.path.exists(filename):
-    with open(filename, "w") as f:
-        json.dump({}, f, indent=4)
-with open(filename, "r") as f:
-    data = json.load(f)
-    data[str(N)] = data_to_log
-with open(filename, "w") as f:
-    json.dump(data, f, indent=4)
-print(f"Results saved to {filename}")
-############## END LOGGING OUTPUTS ###############

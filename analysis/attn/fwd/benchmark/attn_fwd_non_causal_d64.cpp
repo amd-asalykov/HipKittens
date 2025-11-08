@@ -399,7 +399,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     //      Load V2 into registers
     load(v_reg, v_smem[0]);
     asm volatile("s_waitcnt lgkmcnt(0)");
-    asm volatile("s_waitcnt vmcnt(2)");
+    asm volatile("s_waitcnt vmcnt(0)");
     __builtin_amdgcn_sched_barrier(0);
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
@@ -430,7 +430,7 @@ __global__ void attend_ker(const attn_globals<D> g) {
     //      Load K4 into registers
     load(k_reg, k_smem[0]);
     asm volatile("s_waitcnt lgkmcnt(0)");
-    asm volatile("s_waitcnt vmcnt(2)");
+    asm volatile("s_waitcnt vmcnt(0)");
     __builtin_amdgcn_sched_barrier(0);
     __builtin_amdgcn_s_barrier();
     __builtin_amdgcn_sched_barrier(0);
