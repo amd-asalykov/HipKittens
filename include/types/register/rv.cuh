@@ -106,10 +106,10 @@ template<typename T> concept tile_layout = align_layout<T> || ortho_layout<T>;
 } // namespace rv
 } // namespace ducks
 
-template<int _l, int _tile_length, ducks::rv_layout::all layout=ducks::rv_layout::naive, ducks::rt_shape::all shape=ducks::rt_shape::rt_16x16> using rv_fl = rv<float, _l, _tile_length, layout, shape>;
-template<int _l, int _tile_length, ducks::rv_layout::all layout=ducks::rv_layout::naive, ducks::rt_shape::all shape=ducks::rt_shape::rt_16x16> using rv_bf = rv<bf16,  _l, _tile_length, layout, shape>;
-template<int _l, int _tile_length, ducks::rv_layout::all layout=ducks::rv_layout::naive, ducks::rt_shape::all shape=ducks::rt_shape::rt_16x16> using rv_hf = rv<half,  _l, _tile_length, layout, shape>;
+template<int _l, int _tile_length, ducks::rt_shape::all shape=ducks::rt_shape::rt_16x16, ducks::rv_layout::all layout=ducks::rv_layout::naive> using rv_fl = rv<float, _l, _tile_length, shape, layout>;
+template<int _l, int _tile_length, ducks::rt_shape::all shape=ducks::rt_shape::rt_16x16, ducks::rv_layout::all layout=ducks::rv_layout::naive> using rv_bf = rv<bf16,  _l, _tile_length, shape, layout>;
+template<int _l, int _tile_length, ducks::rt_shape::all shape=ducks::rt_shape::rt_16x16, ducks::rv_layout::all layout=ducks::rv_layout::naive> using rv_hf = rv<half,  _l, _tile_length, shape, layout>;
 
-template<typename _T, int _l> using rv_naive = rv<_T,  _l, _l, ducks::rv_layout::naive, ducks::rt_shape::rt_16x16>;
+template<typename _T, int _l> using rv_naive = rv<_T,  _l, _l, ducks::rt_shape::rt_16x16, ducks::rv_layout::naive>;
 
 } // namespace kittens
