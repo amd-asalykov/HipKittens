@@ -24,9 +24,6 @@ We support CDNA3 and CDNA 4.
 ## Setup
 
 ```bash
-# clone the repo
-git clone git@github.com:HazyResearch/HipKittens.git
-
 # obtain an amd docker using docker pull or podman pull
 podman pull docker.io/rocm/7.0-preview:rocm7.0_preview_pytorch_training_mi35x_beta
 
@@ -45,6 +42,9 @@ podman run -it \
     -e SAFETENSORS_FAST_GPU=1 \
     rocm/7.0-preview:rocm7.0_preview_pytorch_training_mi35x_beta \
     bash
+
+# clone the repo
+git clone https://github.com/HazyResearch/HipKittens.git
 
 # set the environment variables
 cd HipKittens/
